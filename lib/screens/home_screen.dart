@@ -2,7 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_avif/flutter_avif.dart';
 
+import '../models/account.dart';
 import '../models/post.dart';
+import 'library_screen.dart';
+import 'login_screen.dart';
 import '../services/fuckxter_api.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -13,7 +16,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final _api = FuckXterApi();
+  late final FuckXterApi _api = widget.api;
   final _scroll = ScrollController();
   final _composer = TextEditingController();
   final _search = TextEditingController();
@@ -33,7 +36,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _api.close();
     _scroll.dispose();
     _composer.dispose();
     _search.dispose();
@@ -190,6 +192,9 @@ class _TopBar extends StatelessWidget {
   final String tab;
   final ValueChanged<String> onTab;
   final VoidCallback onTheme;
+  final Account? account;
+  final ValueChanged<Account?> onAccountChanged;
+  final FuckXterApi api;
 
   @override
   Widget build(BuildContext context) {

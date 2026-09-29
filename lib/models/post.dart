@@ -26,6 +26,10 @@ class Post {
 
   factory Post.fromJson(Map<String, dynamic> json) {
     final viewer = json['viewer'] as Map<String, dynamic>? ?? const {};
+    final media = json['media'];
+    final firstMedia = media is List && media.isNotEmpty
+        ? media.first
+        : media;
     return Post(
       id: json['id'] as String,
       author: Author.fromJson(json['author'] as Map<String, dynamic>),
@@ -34,8 +38,8 @@ class Post {
           DateTime.now(),
       stats: PostStats.fromJson(
           json['stats'] as Map<String, dynamic>? ?? const {}),
-      media: json['media'] is Map<String, dynamic>
-          ? PostMedia.fromJson(json['media'] as Map<String, dynamic>)
+      media: firstMedia is Map<String, dynamic>
+          ? PostMedia.fromJson(firstMedia)
           : null,
       liked: viewer['liked'] as bool? ?? false,
       reposted: viewer['reposted'] as bool? ?? false,

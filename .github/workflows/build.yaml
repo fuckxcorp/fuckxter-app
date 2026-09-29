@@ -1,0 +1,35 @@
+name: I don't care if Monday's blue
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Friday I'm in love
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+
+      - name: Flutter
+        uses: subosito/flutter-action@main
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Format
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build
+        run: flutter build apk --debug

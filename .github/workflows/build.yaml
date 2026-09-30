@@ -21,7 +21,7 @@ jobs:
         shell: bash
         run: |
           vercion=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
-          echo "version=$vercion" >> "$GITHUB_ENV"
+          echo "version=$vercion" >> "$GITHUB_OUTPUT"
 
       - name: Flutter
         uses: subosito/flutter-action@main

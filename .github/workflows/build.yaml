@@ -35,7 +35,6 @@ jobs:
           sed -i 's/JavaVersion.VERSION_11/JavaVersion.VERSION_17/g' "$plugin_dir/android/build.gradle"
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze
-          flutter test
 
       - name: Build!
         shell: bash

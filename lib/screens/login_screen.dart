@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../models/account.dart';
 import '../services/fuckxter_api.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -98,7 +97,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (error != null) ...[
                   const SizedBox(height: 12),
                   Text(error!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
                 ],
                 const SizedBox(height: 20),
                 FilledButton(

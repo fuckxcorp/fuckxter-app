@@ -4,12 +4,20 @@ import 'package:flutter_avif/flutter_avif.dart';
 
 import '../models/account.dart';
 import '../models/post.dart';
-import 'library_screen.dart';
-import 'login_screen.dart';
 import '../services/fuckxter_api.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.onToggleTheme});
+  const HomeScreen({
+    super.key,
+    required this.api,
+    required this.account,
+    required this.onAccountChanged,
+    required this.onToggleTheme,
+  });
+
+  final FuckXterApi api;
+  final Account? account;
+  final ValueChanged<Account?> onAccountChanged;
   final VoidCallback onToggleTheme;
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -192,9 +200,6 @@ class _TopBar extends StatelessWidget {
   final String tab;
   final ValueChanged<String> onTab;
   final VoidCallback onTheme;
-  final Account? account;
-  final ValueChanged<Account?> onAccountChanged;
-  final FuckXterApi api;
 
   @override
   Widget build(BuildContext context) {

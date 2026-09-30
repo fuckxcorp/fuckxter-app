@@ -22,6 +22,16 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Patch flutter_avif Android plugin
+        run: |
+          plugin_dir="$(find "$PUB_CACHE/hosted/pub.dev" -maxdepth 1 -type d -name 'flutter_avif_android-*' | head -n 1)"
+          test -n "$plugin_dir"
+          find "$plugin_dir/android/src/main/java" \
+            -name 'FlutterAvifPlugin.java' \
+            -delete
+          sed -i 's/compileSdkVersion 31/compileSdkVersion 36/' "$plugin_dir/android/build.gradle"
+          sed -i 's/JavaVersion.VERSION_11/JavaVersion.VERSION_17/g' "$plugin_dir/android/build.gradle"
+
       - name: Format
         run: dart format --output=none --set-exit-if-changed lib test
 

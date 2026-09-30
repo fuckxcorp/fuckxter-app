@@ -27,9 +27,7 @@ class Post {
   factory Post.fromJson(Map<String, dynamic> json) {
     final viewer = json['viewer'] as Map<String, dynamic>? ?? const {};
     final media = json['media'];
-    final firstMedia = media is List && media.isNotEmpty
-        ? media.first
-        : media;
+    final firstMedia = media is List && media.isNotEmpty ? media.first : media;
     return Post(
       id: json['id'] as String,
       author: Author.fromJson(json['author'] as Map<String, dynamic>),

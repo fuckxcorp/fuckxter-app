@@ -53,7 +53,9 @@ class FuckXterApi {
   Future<Account?> me() async {
     final data = await _json('GET', '/auth/me');
     final account = data['account'];
-    return account is Map ? Account.fromJson(Map<String, dynamic>.from(account)) : null;
+    return account is Map
+        ? Account.fromJson(Map<String, dynamic>.from(account))
+        : null;
   }
 
   Future<Account> signIn(String identifier, String password,
@@ -77,11 +79,11 @@ class FuckXterApi {
         if (cursor != null) 'cursor': cursor,
       }));
 
-  Future<SearchResult> search(String query) async => SearchResult.fromJson(
-      await _json('GET', '/search', query: {'q': query}));
+  Future<Map<String, dynamic>> search(String query) =>
+      _json('GET', '/search', query: {'q': query});
 
-  Future<void> createPost(String text) async => _json('POST', '/posts',
-      body: {'text': text, 'visibility': 'public'});
+  Future<void> createPost(String text) async =>
+      _json('POST', '/posts', body: {'text': text, 'visibility': 'public'});
 
   Future<Map<String, dynamic>> like(String id, bool active) =>
       _json(active ? 'PUT' : 'DELETE', '/posts/$id/like');
@@ -101,8 +103,7 @@ class FuckXterApi {
 
   Future<UserProfile> profile(String handle) async {
     final data = await _json('GET', '/users/${Uri.encodeComponent(handle)}');
-    return UserProfile.fromJson(
-        Map<String, dynamic>.from(data['user'] as Map));
+    return UserProfile.fromJson(Map<String, dynamic>.from(data['user'] as Map));
   }
 
   Future<List<Post>> userPosts(String handle) async {
@@ -113,9 +114,9 @@ class FuckXterApi {
         .toList();
   }
 
-  Future<void> follow(String handle, bool active) async =>
-      _json(active ? 'PUT' : 'DELETE',
-          '/users/${Uri.encodeComponent(handle)}/follow');
+  Future<void> follow(String handle, bool active) async => _json(
+      active ? 'PUT' : 'DELETE',
+      '/users/${Uri.encodeComponent(handle)}/follow');
 
   Future<Map<String, dynamic>> comments(String postId) =>
       _json('GET', '/posts/$postId/comments');
@@ -134,9 +135,11 @@ class FuckXterApi {
   Future<Map<String, dynamic>> conversation(String handle) =>
       _json('GET', '/messages/${Uri.encodeComponent(handle)}');
 
-  Future<void> sendMessage(String handle, String text) async => _json(
-      'POST', '/messages/${Uri.encodeComponent(handle)}',
-      body: {'text': text, 'id': DateTime.now().microsecondsSinceEpoch.toString()});
+  Future<void> sendMessage(String handle, String text) async =>
+      _json('POST', '/messages/${Uri.encodeComponent(handle)}', body: {
+        'text': text,
+        'id': DateTime.now().microsecondsSinceEpoch.toString()
+      });
 }
 
 class ApiException implements Exception {

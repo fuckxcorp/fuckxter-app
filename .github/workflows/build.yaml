@@ -23,7 +23,10 @@ jobs:
         run: flutter pub get
 
       - name: Format
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: |
+          dart format lib test
+          git diff -- lib test
+          exit 1
 
       - name: Analyze
         run: flutter analyze

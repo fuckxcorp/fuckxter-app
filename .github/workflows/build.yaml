@@ -16,6 +16,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@main
 
+      - name: Get version
+        id: get_version
+        shell: bash
+        run: |
+          vercion=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          echo "version=$vercion" >> "$GITHUB_ENV"
+
       - name: Flutter
         uses: subosito/flutter-action@main
         with:
@@ -42,3 +49,14 @@ jobs:
           flutter build apk
           ls
 
+      - name: Release
+        uses: softprops/action-gh-release@master
+        with:
+          tag_name: V${{ steps.get_version.outputs.version }}
+          files: build/app/outputs/flutter-apk/app-release.apk
+          fail_on_unmatched_files: true
+          body: |
+            # 📝 更新日志
+            - 修复和改进。
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -73,7 +73,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         body: RefreshIndicator(
           onRefresh: load,
           child: loading
-              ? const ListView(children: [
+              ? ListView(children: const [
                   SizedBox(height: 260),
                   Center(child: CircularProgressIndicator(strokeWidth: 2))
                 ])

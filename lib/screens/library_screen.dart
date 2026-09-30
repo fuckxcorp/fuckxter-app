@@ -112,7 +112,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
     if (widget.mode == 'saved') {
       return ListView(
-          padding: const EdgeInsets.all(16), children: posts.map(_postTile).toList());
+          padding: const EdgeInsets.all(16),
+          children: posts.map(_postTile).toList());
     }
     final items = (data?[widget.mode == 'notice' ? 'notices' : 'threads']
             as List<dynamic>? ??
@@ -134,8 +135,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ? Map<String, dynamic>.from(item['actor'] as Map)
               : <String, dynamic>{};
           return ListTile(
-            title: Text(_noticeTitle(item['type'] as String? ?? 'system',
-                actor['name'] as String?)),
+            title: Text(_noticeTitle(
+                item['type'] as String? ?? 'system', actor['name'] as String?)),
             subtitle: Text(item['post'] is Map
                 ? (item['post'] as Map)['text'] as String? ?? ''
                 : ''),
@@ -179,10 +180,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
 class ConversationScreen extends StatefulWidget {
   const ConversationScreen(
-      {super.key,
-      required this.api,
-      required this.handle,
-      required this.name});
+      {super.key, required this.api, required this.handle, required this.name});
 
   final FuckXterApi api;
   final String handle;
@@ -234,7 +232,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
           children: [
             Expanded(
               child: loading
-                  ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2))
                   : ListView.builder(
                       padding: const EdgeInsets.all(14),
                       itemCount: messages.length,
@@ -243,8 +242,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                             Map<String, dynamic>.from(messages[i] as Map);
                         final mine = message['mine'] as bool? ?? false;
                         return Align(
-                          alignment:
-                              mine ? Alignment.centerRight : Alignment.centerLeft,
+                          alignment: mine
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
                           child: Card(
                             child: Padding(
                               padding: const EdgeInsets.all(12),

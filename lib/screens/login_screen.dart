@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../models/account.dart';
 import '../services/fuckxter_api.dart';
 
 class LoginScreen extends StatefulWidget {

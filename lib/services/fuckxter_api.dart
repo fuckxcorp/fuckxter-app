@@ -79,8 +79,8 @@ class FuckXterApi {
         if (cursor != null) 'cursor': cursor,
       }));
 
-  Future<SearchResult> search(String query) async =>
-      SearchResult.fromJson(await _json('GET', '/search', query: {'q': query}));
+  Future<Map<String, dynamic>> search(String query) =>
+      _json('GET', '/search', query: {'q': query});
 
   Future<void> createPost(String text) async =>
       _json('POST', '/posts', body: {'text': text, 'visibility': 'public'});

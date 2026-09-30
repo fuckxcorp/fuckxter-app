@@ -5,6 +5,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,11 +22,10 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Patch flutter_avif Android plugin
+      - name: Prepare
+        shell: bash
         run: |
+          flutter pub get
           plugin_dir="$(find "$PUB_CACHE/hosted/pub.dev" -maxdepth 1 -type d -name 'flutter_avif_android-*' | head -n 1)"
           test -n "$plugin_dir"
           find "$plugin_dir/android/src/main/java" \
@@ -31,15 +33,13 @@ jobs:
             -delete
           sed -i 's/compileSdkVersion 31/compileSdkVersion 36/' "$plugin_dir/android/build.gradle"
           sed -i 's/JavaVersion.VERSION_11/JavaVersion.VERSION_17/g' "$plugin_dir/android/build.gradle"
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze
+          flutter test
 
-      - name: Format
-        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Build!
+        shell: bash
+        run: |
+          flutter build apk
+          ls
 
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Test
-        run: flutter test
-
-      - name: Build
-        run: flutter build apk --debug

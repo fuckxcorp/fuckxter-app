@@ -20,8 +20,6 @@ jobs:
             target: android
           - os: ubuntu-latest
             target: linux
-          - os: ubuntu-latest
-            target: web
           - os: windows-latest
             target: windows
           - os: macos-latest
@@ -58,10 +56,7 @@ jobs:
           fi
           if [ "${{ matrix.target }}" = "linux" ]; then
             sudo apt-get update
-            sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-dev libdav1d-dev
-          fi
-          if [ "${{ matrix.target }}" = "web" ]; then
-            flutter create --platforms=web .
+            sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libdav1d-dev
           fi
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze
@@ -78,10 +73,6 @@ jobs:
             linux)
               flutter build linux
               tar -C build/linux/x64/release -czf release/fuckxter-linux-x64.tar.gz bundle
-              ;;
-            web)
-              flutter build web
-              tar -C build/web -czf release/fuckxter-web.tar.gz .
               ;;
             windows)
               flutter build windows
@@ -132,6 +123,6 @@ jobs:
           body: |
             # 📝 更新日志
             - 修复和改进。
-            - Android、Linux、Windows、macOS、Web。
+            - Android、Linux、Windows、macOS。
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

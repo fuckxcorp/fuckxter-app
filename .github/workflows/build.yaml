@@ -1,4 +1,4 @@
-name: I don't care if Monday's blue
+name: Keep running back , coming back for more
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Friday I'm in love (${{ matrix.target }})
+    name: Morning dew (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,7 +35,7 @@ jobs:
           vercion=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
           echo "version=$vercion" >> "$GITHUB_OUTPUT"
 
-      - name: Flutter
+      - name: Install Flutter
         uses: subosito/flutter-action@main
         with:
           channel: stable
@@ -85,44 +85,15 @@ jobs:
           esac
           ls -la release
 
-      - name: Keep the bits
-        uses: actions/upload-artifact@main
-        with:
-          name: fuckxter-${{ matrix.target }}-${{ steps.get_version.outputs.version }}
-          path: release/*
-          if-no-files-found: error
-
-  release:
-    name: Saturday I'm in love
-    needs: build
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@main
-
-      - name: Get version
-        id: get_version
-        shell: bash
-        run: |
-          vercion=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
-          echo "version=$vercion" >> "$GITHUB_OUTPUT"
-
-      - name: Take the bits
-        uses: actions/download-artifact@main
-        with:
-          path: release
-          merge-multiple: true
-
       - name: Release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@master
         with:
           tag_name: V${{ steps.get_version.outputs.version }}
-          files: release/**/*
+          files: release/*
           fail_on_unmatched_files: true
           body: |
             # 📝 更新日志
             - 修复和改进。
-            - Android、Linux、Windows、macOS。
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -70,14 +70,22 @@ class NetImage extends StatelessWidget {
           height: 120,
           child: Center(child: Icon(Icons.broken_image_outlined)),
         );
+    final ratio = MediaQuery.devicePixelRatioOf(context);
+    final logical = width != null && width!.isFinite && width! > 0
+        ? width!
+        : MediaQuery.sizeOf(context).width;
+    final cacheWidth = (logical * ratio).clamp(48, 1440).round();
     final lower = url.toLowerCase();
     if (lower.contains('.avif')) {
-      return AvifImage.network(url,
-          fit: fit,
-          width: width,
-          height: height,
-          headers: headers,
-          errorBuilder: (_, __, ___) => error);
+      return AvifImage.network(
+        url,
+        fit: fit,
+        width: width,
+        height: height,
+        headers: headers,
+        cacheWidth: cacheWidth,
+        errorBuilder: (_, __, ___) => error,
+      );
     }
     return Image.network(
       url,
@@ -85,12 +93,15 @@ class NetImage extends StatelessWidget {
       width: width,
       height: height,
       headers: headers,
+      cacheWidth: cacheWidth,
+      gaplessPlayback: true,
       errorBuilder: (_, __, ___) => AvifImage.network(
         url,
         fit: fit,
         width: width,
         height: height,
         headers: headers,
+        cacheWidth: cacheWidth,
         errorBuilder: (_, __, ___) => error,
       ),
     );

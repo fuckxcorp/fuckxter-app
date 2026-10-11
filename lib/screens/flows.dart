@@ -244,12 +244,17 @@ class _SearchScreenState extends State<SearchScreen> {
           ? const LoadingPane()
           : error != null
               ? EmptyHint('$error')
-              : ListView(
-                  children: [
-                    if (users.isEmpty && posts.isEmpty)
-                      const EmptyHint('没有匹配的用户或帖子'),
-                    for (final user in users)
-                      ListTile(
+              : ListView.builder(
+                  itemCount: users.isEmpty && posts.isEmpty
+                      ? 1
+                      : users.length + posts.length,
+                  itemBuilder: (_, index) {
+                    if (users.isEmpty && posts.isEmpty) {
+                      return const EmptyHint('没有匹配的用户或帖子');
+                    }
+                    if (index < users.length) {
+                      final user = users[index];
+                      return ListTile(
                         leading: Avatar(
                           name: user.name,
                           size: 40,
@@ -264,10 +269,15 @@ class _SearchScreenState extends State<SearchScreen> {
                             '@${user.handle} · 帖子 ${user.posts} · 粉丝 ${user.followers}'),
                         onTap: () =>
                             openProfile(context, widget.session, user.handle),
-                      ),
-                    for (final post in posts)
-                      PostCard(post: post, session: widget.session),
-                  ],
+                      );
+                    }
+                    final post = posts[index - users.length];
+                    return PostCard(
+                      key: ValueKey(post.id),
+                      post: post,
+                      session: widget.session,
+                    );
+                  },
                 ),
     );
   }
@@ -349,36 +359,41 @@ class _PostScreenState extends State<PostScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: _load,
-            child: ListView(
-              children: [
-                PostCard(
-                  post: post,
-                  session: widget.session,
-                  onChanged: (next) => setState(() => post = next),
-                  onOpen: () {},
-                ),
-                if (loading)
-                  const Padding(
+            child: ListView.builder(
+              itemCount: 1 +
+                  (loading || error != null || comments.isEmpty
+                      ? 1
+                      : comments.length),
+              itemBuilder: (_, index) {
+                if (index == 0) {
+                  return PostCard(
+                    post: post,
+                    session: widget.session,
+                    onChanged: (next) => setState(() => post = next),
+                    onOpen: () {},
+                  );
+                }
+                if (loading) {
+                  return const Padding(
                     padding: EdgeInsets.all(24),
                     child: LoadingPane(),
-                  )
-                else if (error != null)
-                  EmptyHint('$error')
-                else if (comments.isEmpty)
-                  const EmptyHint('还没有评论')
-                else
-                  for (final comment in comments)
-                    _CommentTile(
-                      comment: comment,
-                      session: widget.session,
-                      postId: post.id,
-                      onReply: () => setState(() {
-                        parentId = comment.id;
-                        reply.text = '@${comment.author.handle} ';
-                      }),
-                      onChanged: _load,
-                    ),
-              ],
+                  );
+                }
+                if (error != null) return EmptyHint('$error');
+                if (comments.isEmpty) return const EmptyHint('还没有评论');
+                final comment = comments[index - 1];
+                return _CommentTile(
+                  key: ValueKey(comment.id),
+                  comment: comment,
+                  session: widget.session,
+                  postId: post.id,
+                  onReply: () => setState(() {
+                    parentId = comment.id;
+                    reply.text = '@${comment.author.handle} ';
+                  }),
+                  onChanged: _load,
+                );
+              },
             ),
           ),
         ),
@@ -405,6 +420,7 @@ class _PostScreenState extends State<PostScreen> {
 
 class _CommentTile extends StatelessWidget {
   const _CommentTile({
+    super.key,
     required this.comment,
     required this.session,
     required this.postId,
@@ -559,104 +575,125 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ? const EmptyHint('没有找到这个用户')
                   : RefreshIndicator(
                       onRefresh: _load,
-                      child: ListView(
-                        children: [
-                          if (user.headerUrl != null)
-                            SizedBox(
-                              height: 140,
-                              width: double.infinity,
-                              child: NetImage(
-                                url: widget.session.api
-                                    .mediaUri(user.headerUrl!)
-                                    .toString(),
-                                fit: BoxFit.cover,
-                                headers: widget.session.api.imageHeaders,
-                              ),
-                            ),
-                          ListTile(
-                            leading: Avatar(
-                              name: user.name,
-                              size: 56,
-                              headers: widget.session.api.imageHeaders,
-                              url: user.avatarUrl == null
-                                  ? null
-                                  : widget.session.api
-                                      .mediaUri(user.avatarUrl!)
-                                      .toString(),
-                            ),
-                            title: Text(user.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w800, fontSize: 20)),
-                            subtitle: Text('@${user.handle}'),
-                            trailing: widget.session.account?.profile.handle ==
-                                    user.handle
-                                ? null
-                                : FilledButton(
-                                    onPressed: () => _follow(user),
-                                    child: Text(
-                                        user.viewerFollowing ? '已关注' : '关注'),
+                      child: ListView.builder(
+                        itemCount: 1 + (posts.isEmpty ? 1 : posts.length),
+                        itemBuilder: (context, index) {
+                          if (index > 0) {
+                            if (posts.isEmpty) {
+                              return const EmptyHint('还没有帖子');
+                            }
+                            final item = posts[index - 1];
+                            return PostCard(
+                              key: ValueKey(item.id),
+                              post: item,
+                              session: widget.session,
+                            );
+                          }
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (user.headerUrl != null)
+                                SizedBox(
+                                  height: 140,
+                                  width: double.infinity,
+                                  child: NetImage(
+                                    url: widget.session.api
+                                        .mediaUri(user.headerUrl!)
+                                        .toString(),
+                                    fit: BoxFit.cover,
+                                    headers: widget.session.api.imageHeaders,
                                   ),
-                          ),
-                          if (user.deleted)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16),
-                              child: Text('这个账号已申请删除。'),
-                            ),
-                          if (user.bio.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                              child: Text(user.bio),
-                            ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Row(children: [
-                              TextButton(
-                                onPressed: () => openConnections(
-                                    context, widget.session, user, 'followers'),
-                                child: Text('粉丝 ${user.followers}'),
-                              ),
-                              TextButton(
-                                onPressed: () => openConnections(
-                                    context, widget.session, user, 'following'),
-                                child: Text('关注 ${user.following}'),
-                              ),
-                              Text('帖子 ${user.posts}'),
-                              const Spacer(),
-                              if (widget.session.account?.profile.handle !=
-                                  user.handle)
-                                PopupMenuButton<String>(
-                                  onSelected: (value) async {
-                                    if (value == 'message') {
-                                      openMessages(context, widget.session,
-                                          handle: user.handle);
-                                    } else if (value == 'block') {
-                                      try {
-                                        await widget.session.api.setBlock(
-                                            user.handle, !user.blocked);
-                                        await _load();
-                                      } catch (error) {
-                                        if (context.mounted) {
-                                          showError(context, error);
-                                        }
-                                      }
-                                    }
-                                  },
-                                  itemBuilder: (_) => [
-                                    if (user.canMessage)
-                                      const PopupMenuItem(
-                                          value: 'message', child: Text('私信')),
-                                    PopupMenuItem(
-                                      value: 'block',
-                                      child: Text(user.blocked ? '取消屏蔽' : '屏蔽'),
-                                    ),
-                                  ],
                                 ),
-                            ]),
-                          ),
-                          for (final post in posts)
-                            PostCard(post: post, session: widget.session),
-                          if (posts.isEmpty) const EmptyHint('还没有帖子'),
-                        ],
+                              ListTile(
+                                leading: Avatar(
+                                  name: user.name,
+                                  size: 56,
+                                  headers: widget.session.api.imageHeaders,
+                                  url: user.avatarUrl == null
+                                      ? null
+                                      : widget.session.api
+                                          .mediaUri(user.avatarUrl!)
+                                          .toString(),
+                                ),
+                                title: Text(user.name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 20)),
+                                subtitle: Text('@${user.handle}'),
+                                trailing:
+                                    widget.session.account?.profile.handle ==
+                                            user.handle
+                                        ? null
+                                        : FilledButton(
+                                            onPressed: () => _follow(user),
+                                            child: Text(user.viewerFollowing
+                                                ? '已关注'
+                                                : '关注'),
+                                          ),
+                              ),
+                              if (user.deleted)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text('这个账号已申请删除。'),
+                                ),
+                              if (user.bio.isNotEmpty)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                  child: Text(user.bio),
+                                ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                child: Row(children: [
+                                  TextButton(
+                                    onPressed: () => openConnections(context,
+                                        widget.session, user, 'followers'),
+                                    child: Text('粉丝 ${user.followers}'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => openConnections(context,
+                                        widget.session, user, 'following'),
+                                    child: Text('关注 ${user.following}'),
+                                  ),
+                                  Text('帖子 ${user.posts}'),
+                                  const Spacer(),
+                                  if (widget.session.account?.profile.handle !=
+                                      user.handle)
+                                    PopupMenuButton<String>(
+                                      onSelected: (value) async {
+                                        if (value == 'message') {
+                                          openMessages(context, widget.session,
+                                              handle: user.handle);
+                                        } else if (value == 'block') {
+                                          try {
+                                            await widget.session.api.setBlock(
+                                                user.handle, !user.blocked);
+                                            await _load();
+                                          } catch (error) {
+                                            if (context.mounted) {
+                                              showError(context, error);
+                                            }
+                                          }
+                                        }
+                                      },
+                                      itemBuilder: (_) => [
+                                        if (user.canMessage)
+                                          const PopupMenuItem(
+                                              value: 'message',
+                                              child: Text('私信')),
+                                        PopupMenuItem(
+                                          value: 'block',
+                                          child: Text(
+                                              user.blocked ? '取消屏蔽' : '屏蔽'),
+                                        ),
+                                      ],
+                                    ),
+                                ]),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
     );
@@ -953,45 +990,46 @@ class _ThreadScreenState extends State<ThreadScreen> {
         Expanded(
           child: loading
               ? const LoadingPane()
-              : ListView(
+              : ListView.builder(
                   padding: const EdgeInsets.all(12),
-                  children: [
-                    for (final message in messages)
-                      Align(
-                        alignment: message.mine
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: GestureDetector(
-                          onLongPress: message.mine
-                              ? () async {
-                                  final ok =
-                                      await confirm(context, '撤回', '撤回这条私信？');
-                                  if (!ok || !context.mounted) return;
-                                  try {
-                                    await widget.session.api.recallMessage(
-                                        widget.handle, message.id);
-                                    await _load();
-                                  } catch (error) {
-                                    if (context.mounted) {
-                                      showError(context, error);
-                                    }
+                  itemCount: messages.length,
+                  itemBuilder: (_, index) {
+                    final message = messages[index];
+                    return Align(
+                      alignment: message.mine
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: GestureDetector(
+                        onLongPress: message.mine
+                            ? () async {
+                                final ok =
+                                    await confirm(context, '撤回', '撤回这条私信？');
+                                if (!ok || !context.mounted) return;
+                                try {
+                                  await widget.session.api
+                                      .recallMessage(widget.handle, message.id);
+                                  await _load();
+                                } catch (error) {
+                                  if (context.mounted) {
+                                    showError(context, error);
                                   }
                                 }
-                              : null,
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(10),
-                            constraints: const BoxConstraints(maxWidth: 420),
-                            color: message.mine
-                                ? const Color(0xFF5B7AA8)
-                                : Theme.of(context).dividerColor,
-                            child: Text(message.body,
-                                style: TextStyle(
-                                    color: message.mine ? Colors.white : null)),
-                          ),
+                              }
+                            : null,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(10),
+                          constraints: const BoxConstraints(maxWidth: 420),
+                          color: message.mine
+                              ? const Color(0xFF5B7AA8)
+                              : Theme.of(context).dividerColor,
+                          child: Text(message.body,
+                              style: TextStyle(
+                                  color: message.mine ? Colors.white : null)),
                         ),
                       ),
-                  ],
+                    );
+                  },
                 ),
         ),
         if (hint != null && hint!.isNotEmpty)
@@ -1059,11 +1097,13 @@ class _SavedScreenState extends State<SavedScreen> {
               ? EmptyHint('$error')
               : posts.isEmpty
                   ? const EmptyHint('还没有收藏')
-                  : ListView(
-                      children: [
-                        for (final post in posts)
-                          PostCard(post: post, session: widget.session),
-                      ],
+                  : ListView.builder(
+                      itemCount: posts.length,
+                      itemBuilder: (_, index) => PostCard(
+                        key: ValueKey(posts[index].id),
+                        post: posts[index],
+                        session: widget.session,
+                      ),
                     ),
     );
   }

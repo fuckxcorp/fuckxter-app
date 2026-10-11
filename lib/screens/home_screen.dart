@@ -246,17 +246,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                       sliver: SliverList.builder(
                         itemCount: posts.length,
-                        itemBuilder: (_, index) => Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 680),
-                            child: PostCard(
-                              post: posts[index],
-                              session: widget.session,
-                              onChanged: (next) =>
-                                  setState(() => posts[index] = next),
+                        itemBuilder: (_, index) {
+                          final post = posts[index];
+                          return RepaintBoundary(
+                            key: ValueKey(post.id),
+                            child: Center(
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 680),
+                                child: PostCard(
+                                  post: post,
+                                  session: widget.session,
+                                  onChanged: (next) =>
+                                      setState(() => posts[index] = next),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     ),
                   SliverToBoxAdapter(

@@ -119,8 +119,6 @@ class AppSession extends ChangeNotifier {
   }
 
   void replaceAccount(Account next) {
-    account = next;
-    notifyListeners();
     _setAccount(next);
   }
 

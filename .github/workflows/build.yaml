@@ -10,8 +10,22 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    name: Friday I'm in love
+    name: Friday I'm in love (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: android
+          - os: ubuntu-latest
+            target: linux
+          - os: ubuntu-latest
+            target: web
+          - os: windows-latest
+            target: windows
+          - os: macos-latest
+            target: macos
     steps:
       - name: Checkout
         uses: actions/checkout@main
@@ -33,30 +47,91 @@ jobs:
         shell: bash
         run: |
           flutter pub get
-          plugin_dir="$(find "$PUB_CACHE/hosted/pub.dev" -maxdepth 1 -type d -name 'flutter_avif_android-*' | head -n 1)"
-          test -n "$plugin_dir"
-          find "$plugin_dir/android/src/main/java" \
-            -name 'FlutterAvifPlugin.java' \
-            -delete
-          sed -i 's/compileSdkVersion 31/compileSdkVersion 36/' "$plugin_dir/android/build.gradle"
-          sed -i 's/JavaVersion.VERSION_11/JavaVersion.VERSION_17/g' "$plugin_dir/android/build.gradle"
+          if [ "${{ matrix.target }}" = "android" ]; then
+            plugin_dir="$(find "$PUB_CACHE/hosted/pub.dev" -maxdepth 1 -type d -name 'flutter_avif_android-*' | head -n 1)"
+            test -n "$plugin_dir"
+            find "$plugin_dir/android/src/main/java" \
+              -name 'FlutterAvifPlugin.java' \
+              -delete
+            sed -i 's/compileSdkVersion 31/compileSdkVersion 36/' "$plugin_dir/android/build.gradle"
+            sed -i 's/JavaVersion.VERSION_11/JavaVersion.VERSION_17/g' "$plugin_dir/android/build.gradle"
+          fi
+          if [ "${{ matrix.target }}" = "linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-dev libdav1d-dev
+          fi
+          if [ "${{ matrix.target }}" = "web" ]; then
+            flutter create --platforms=web .
+          fi
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze
 
       - name: Build!
         shell: bash
         run: |
-          flutter build apk
-          ls
+          mkdir -p release
+          case "${{ matrix.target }}" in
+            android)
+              flutter build apk
+              cp build/app/outputs/flutter-apk/app-release.apk release/
+              ;;
+            linux)
+              flutter build linux
+              tar -C build/linux/x64/release -czf release/fuckxter-linux-x64.tar.gz bundle
+              ;;
+            web)
+              flutter build web
+              tar -C build/web -czf release/fuckxter-web.tar.gz .
+              ;;
+            windows)
+              flutter build windows
+              tar -C build/windows/x64/runner/Release -acf release/fuckxter-windows-x64.zip .
+              ;;
+            macos)
+              flutter build macos
+              tar -C build/macos/Build/Products/Release -czf release/fuckxter-macos.tar.gz fuckxter_app.app
+              ;;
+          esac
+          ls -la release
+
+      - name: Keep the bits
+        uses: actions/upload-artifact@main
+        with:
+          name: fuckxter-${{ matrix.target }}-${{ steps.get_version.outputs.version }}
+          path: release/*
+          if-no-files-found: error
+
+  release:
+    name: Saturday I'm in love
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+
+      - name: Get version
+        id: get_version
+        shell: bash
+        run: |
+          vercion=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          echo "version=$vercion" >> "$GITHUB_OUTPUT"
+
+      - name: Take the bits
+        uses: actions/download-artifact@main
+        with:
+          path: release
+          merge-multiple: true
 
       - name: Release
         uses: softprops/action-gh-release@master
         with:
           tag_name: V${{ steps.get_version.outputs.version }}
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: release/**/*
           fail_on_unmatched_files: true
           body: |
             # 📝 更新日志
             - 修复和改进。
+            - Android、Linux、Windows、macOS、Web。
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

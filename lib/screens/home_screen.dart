@@ -1,189 +1,282 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_avif/flutter_avif.dart';
 
-import '../models/account.dart';
-import '../models/post.dart';
+import '../models/models.dart';
 import '../services/fuckxter_api.dart';
+import '../session.dart';
+import '../widgets/bits.dart';
+import '../widgets/post_card.dart';
+import 'flows.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-    required this.api,
-    required this.account,
-    required this.onAccountChanged,
-    required this.onToggleTheme,
-  });
+  const HomeScreen({super.key, required this.session});
+  final AppSession session;
 
-  final FuckXterApi api;
-  final Account? account;
-  final ValueChanged<Account?> onAccountChanged;
-  final VoidCallback onToggleTheme;
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late final FuckXterApi _api = widget.api;
-  final _scroll = ScrollController();
-  final _composer = TextEditingController();
-  final _search = TextEditingController();
-  final List<Post> _posts = [];
-  String _tab = 'foryou';
-  String? _cursor;
-  Object? _error;
-  bool _loading = false;
-  bool _posting = false;
+  final scroll = ScrollController();
+  final composer = TextEditingController();
+  final search = TextEditingController();
+  final posts = <Post>[];
+  final media = <PostMedia>[];
+  String tab = 'foryou';
+  String visibility = 'public';
+  String? cursor;
+  Object? error;
+  bool loading = false;
+  bool posting = false;
+  int _generation = 0;
+  String? _handle;
 
   @override
   void initState() {
     super.initState();
-    _scroll.addListener(_onScroll);
+    _handle = widget.session.account?.profile.handle;
+    widget.session.addListener(_onSession);
+    scroll.addListener(() {
+      if (scroll.position.extentAfter < 500 && cursor != null && !loading) {
+        _load();
+      }
+    });
     _load(reset: true);
+  }
+
+  void _onSession() {
+    if (!mounted) return;
+    final handle = widget.session.account?.profile.handle;
+    final changed = handle != _handle;
+    _handle = handle;
+    setState(() {});
+    if (changed) _load(reset: true);
   }
 
   @override
   void dispose() {
-    _scroll.dispose();
-    _composer.dispose();
-    _search.dispose();
+    widget.session.removeListener(_onSession);
+    scroll.dispose();
+    composer.dispose();
+    search.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    if (_scroll.position.extentAfter < 500 && _cursor != null) _load();
-  }
-
   Future<void> _load({bool reset = false}) async {
-    if (_loading) return;
+    if (!reset && loading) return;
+    final generation = ++_generation;
+    final requested = tab;
+    final start = reset ? null : cursor;
     setState(() {
-      _loading = true;
-      _error = null;
+      loading = true;
+      error = null;
       if (reset) {
-        _posts.clear();
-        _cursor = null;
+        posts.clear();
+        cursor = null;
       }
     });
     try {
-      final page = await _api.timeline(tab: _tab, cursor: _cursor);
-      if (!mounted) return;
+      final page =
+          await widget.session.api.timeline(tab: requested, cursor: start);
+      if (!mounted || generation != _generation || tab != requested) return;
       setState(() {
-        _posts.addAll(page.posts);
-        _cursor = page.nextCursor;
+        posts.addAll(page.posts);
+        cursor = page.nextCursor;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = error);
+      if (mounted && generation == _generation) {
+        setState(() => this.error = error);
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _generation) {
+        setState(() => loading = false);
+      }
     }
   }
 
-  void _changeTab(String tab) {
-    if (_tab == tab) return;
-    setState(() => _tab = tab);
-    _load(reset: true);
+  Future<void> _guarded(Future<void> Function() action) async {
+    if (widget.session.account == null) {
+      final ok = await openLogin(context, widget.session);
+      if (!ok || !mounted) return;
+    }
+    await action();
   }
 
   Future<void> _submit() async {
-    final text = _composer.text.trim();
-    if (text.isEmpty || _posting) return;
-    setState(() => _posting = true);
-    try {
-      await _api.createPost(text);
-      _composer.clear();
-      await _load(reset: true);
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.toString())));
+    final text = composer.text.trim();
+    if (text.isEmpty || posting) return;
+    await _guarded(() async {
+      setState(() => posting = true);
+      try {
+        await widget.session.api.createPost(
+          text,
+          mediaIds: media
+              .map((item) => item.id)
+              .where((id) => id.isNotEmpty)
+              .toList(),
+          visibility: visibility,
+        );
+        composer.clear();
+        media.clear();
+        await _load(reset: true);
+      } catch (error) {
+        if (mounted) showError(context, error);
+      } finally {
+        if (mounted) setState(() => posting = false);
       }
-    } finally {
-      if (mounted) setState(() => _posting = false);
+    });
+  }
+
+  Future<void> _attach() async {
+    await _guarded(() async {
+      final picked = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+        allowMultiple: true,
+      );
+      if (picked == null || !mounted) return;
+      try {
+        for (final file in picked.files) {
+          if (media.length >= 10) {
+            if (mounted) showError(context, '最多 10 张图片');
+            break;
+          }
+          final bytes = file.bytes;
+          if (bytes == null) continue;
+          final uploaded = await widget.session.api.uploadMedia(
+            bytes: bytes,
+            name: file.name,
+            contentType: imageType(file.name) ?? 'image/jpeg',
+          );
+          if (mounted) setState(() => media.add(uploaded));
+        }
+      } catch (error) {
+        if (mounted) showError(context, error);
+      }
+    });
+  }
+
+  Future<void> _openAccount(String value) async {
+    switch (value) {
+      case 'login':
+        await openLogin(context, widget.session);
+      case 'theme':
+        widget.session.toggleTheme();
+      case 'notices':
+        await _guarded(() async => openNotices(context, widget.session));
+      case 'messages':
+        await _guarded(() async => openMessages(context, widget.session));
+      case 'saved':
+        await _guarded(() async => openSaved(context, widget.session));
+      case 'history':
+        openHistory(context, widget.session);
+      case 'settings':
+        openSettings(context, widget.session);
+      case 'profile':
+        final handle = widget.session.account?.profile.handle;
+        if (handle != null) openProfile(context, widget.session, handle);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final account = widget.session.account;
     return Scaffold(
       body: SafeArea(
         child: Column(children: [
           _TopBar(
-              search: _search,
-              tab: _tab,
-              onTab: _changeTab,
-              onTheme: widget.onToggleTheme),
+            search: search,
+            tab: tab,
+            account: account,
+            imageHeaders: widget.session.api.imageHeaders,
+            onSearch: () => openSearch(context, widget.session, search.text),
+            onTab: (value) {
+              if (tab == value) return;
+              setState(() => tab = value);
+              _load(reset: true);
+            },
+            onAccount: _openAccount,
+          ),
           Expanded(
-              child: RefreshIndicator(
-            onRefresh: () => _load(reset: true),
-            child: CustomScrollView(controller: _scroll, slivers: [
-              SliverToBoxAdapter(
-                  child: _Composer(
-                      controller: _composer,
-                      posting: _posting,
-                      onSubmit: _submit)),
-              if (_posts.isEmpty && _loading)
-                const SliverFillRemaining(
-                    child: Center(
-                        child: CircularProgressIndicator(strokeWidth: 2)))
-              else if (_posts.isEmpty && _error != null)
-                SliverFillRemaining(
-                    child: _ErrorState(
-                        error: _error.toString(),
-                        onRetry: () => _load(reset: true)))
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  sliver: SliverLayoutBuilder(builder: (context, constraints) {
-                    final columns = constraints.crossAxisExtent >= 980 ? 2 : 1;
-                    if (columns == 1) {
-                      return SliverList.builder(
-                          itemCount: _posts.length,
-                          itemBuilder: (_, i) => Center(
-                              child: ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(maxWidth: 680),
-                                  child:
-                                      PostCard(post: _posts[i], api: _api))));
-                    }
-                    final left = <Post>[], right = <Post>[];
-                    for (var i = 0; i < _posts.length; i++) {
-                      (i.isEven ? left : right).add(_posts[i]);
-                    }
-                    return SliverToBoxAdapter(
-                        child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                          Expanded(
-                              child: Column(
-                                  children: left
-                                      .map((p) => PostCard(post: p, api: _api))
-                                      .toList())),
-                          const SizedBox(width: 10),
-                          Expanded(
-                              child: Column(
-                                  children: right
-                                      .map((p) => PostCard(post: p, api: _api))
-                                      .toList()))
-                        ]));
-                  }),
-                ),
-              SliverToBoxAdapter(
-                  child: SizedBox(
+            child: RefreshIndicator(
+              onRefresh: () => _load(reset: true),
+              child: CustomScrollView(
+                controller: scroll,
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: _Composer(
+                      controller: composer,
+                      posting: posting,
+                      visibility: visibility,
+                      mediaCount: media.length,
+                      avatarUrl: account?.avatarUrl == null
+                          ? null
+                          : widget.session.api
+                              .mediaUri(account!.avatarUrl!)
+                              .toString(),
+                      imageHeaders: widget.session.api.imageHeaders,
+                      name: account?.profile.name ?? '?',
+                      onVisibility: (value) =>
+                          setState(() => visibility = value),
+                      onAttach: _attach,
+                      onSubmit: _submit,
+                    ),
+                  ),
+                  if (posts.isEmpty && loading)
+                    const SliverFillRemaining(child: LoadingPane())
+                  else if (posts.isEmpty && error != null)
+                    SliverFillRemaining(
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('$error'),
+                            const SizedBox(height: 12),
+                            OutlinedButton(
+                              onPressed: () => _load(reset: true),
+                              child: const Text('重新加载'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      sliver: SliverList.builder(
+                        itemCount: posts.length,
+                        itemBuilder: (_, index) => Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 680),
+                            child: PostCard(
+                              post: posts[index],
+                              session: widget.session,
+                              onChanged: (next) =>
+                                  setState(() => posts[index] = next),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  SliverToBoxAdapter(
+                    child: SizedBox(
                       height: 72,
                       child: Center(
-                          child: _loading
-                              ? const CircularProgressIndicator(strokeWidth: 2)
-                              : Text(
-                                  _cursor == null && _posts.isNotEmpty
-                                      ? '你已看完全部内容'
-                                      : '',
-                                  style: TextStyle(
-                                      color: dark
-                                          ? Colors.white38
-                                          : Colors.black38))))),
-            ]),
-          )),
+                        child: loading && posts.isNotEmpty
+                            ? const CircularProgressIndicator(strokeWidth: 2)
+                            : Text(
+                                cursor == null && posts.isNotEmpty
+                                    ? '你已看完全部内容'
+                                    : '',
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ]),
       ),
     );
@@ -191,84 +284,115 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar(
-      {required this.search,
-      required this.tab,
-      required this.onTab,
-      required this.onTheme});
+  const _TopBar({
+    required this.search,
+    required this.tab,
+    required this.account,
+    required this.imageHeaders,
+    required this.onSearch,
+    required this.onTab,
+    required this.onAccount,
+  });
+
   final TextEditingController search;
   final String tab;
+  final Account? account;
+  final Map<String, String> imageHeaders;
+  final VoidCallback onSearch;
   final ValueChanged<String> onTab;
-  final VoidCallback onTheme;
+  final ValueChanged<String> onAccount;
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final border = Theme.of(context).dividerColor;
+    final tabs = Row(mainAxisSize: MainAxisSize.min, children: [
+      _Tab(label: '推荐', value: 'foryou', selected: tab, onTap: onTab),
+      _Tab(label: '实时', value: 'latest', selected: tab, onTap: onTab),
+      _Tab(label: '关注', value: 'following', selected: tab, onTap: onTab),
+    ]);
+    final menu = PopupMenuButton<String>(
+      tooltip: '账号',
+      onSelected: onAccount,
+      itemBuilder: (_) => [
+        if (account == null)
+          const PopupMenuItem(value: 'login', child: Text('登录 / 注册'))
+        else
+          PopupMenuItem(
+              value: 'profile', child: Text('@${account!.profile.handle}')),
+        const PopupMenuItem(value: 'notices', child: Text('通知')),
+        const PopupMenuItem(value: 'messages', child: Text('私信')),
+        const PopupMenuItem(value: 'saved', child: Text('收藏')),
+        const PopupMenuItem(value: 'history', child: Text('浏览记录')),
+        const PopupMenuItem(value: 'settings', child: Text('设置')),
+        const PopupMenuItem(value: 'theme', child: Text('切换主题')),
+      ],
+      child: Container(
+        width: 62,
+        height: 48,
+        color: dark ? const Color(0xFFF2F4F6) : const Color(0xFF101215),
+        alignment: Alignment.center,
+        child: account == null
+            ? Icon(CupertinoIcons.person,
+                color: dark ? Colors.black : Colors.white)
+            : Avatar(
+                name: account!.profile.name,
+                size: 32,
+                headers: imageHeaders,
+                url: account!.avatarUrl == null
+                    ? null
+                    : FuckXterApi.media(account!.avatarUrl!),
+              ),
+      ),
+    );
     return Container(
       decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          border: Border(bottom: BorderSide(color: border))),
+        border:
+            Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+      ),
       child: LayoutBuilder(builder: (context, size) {
         final compact = size.maxWidth < 720;
-        final tabs = Row(mainAxisSize: MainAxisSize.min, children: [
-          _Tab(label: '推荐', value: 'foryou', selected: tab, onTap: onTab),
-          _Tab(label: '实时', value: 'latest', selected: tab, onTap: onTab),
-          _Tab(label: '关注', value: 'following', selected: tab, onTap: onTab),
-        ]);
-        final account = PopupMenuButton<String>(
-          tooltip: '账号',
-          color: dark ? const Color(0xFF1A1D22) : const Color(0xFF101215),
-          onSelected: (value) {
-            if (value == 'theme') onTheme();
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(
-                value: 'login',
-                child: Text('登录 / 注册', style: TextStyle(color: Colors.white))),
-            PopupMenuItem(
-                value: 'theme',
-                child: Text('切换主题', style: TextStyle(color: Colors.white))),
-            PopupMenuItem(
-                value: 'settings',
-                child: Text('设置', style: TextStyle(color: Colors.white)))
-          ],
-          child: Container(
-              width: 62,
-              height: 48,
-              color: dark ? const Color(0xFFF2F4F6) : const Color(0xFF101215),
-              child: Icon(CupertinoIcons.person,
-                  color: dark ? Colors.black : Colors.white)),
+        final field = TextField(
+          controller: search,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => onSearch(),
+          decoration: const InputDecoration(
+            prefixIcon: Icon(CupertinoIcons.search, size: 18),
+            hintText: '搜索 FuckXter',
+            border: InputBorder.none,
+          ),
         );
-        const brand = Text('FuckXter',
-            style: TextStyle(
-                fontSize: 23,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -1.2));
         if (compact) {
           return Column(children: [
-            Padding(
-                padding: const EdgeInsets.only(left: 14),
-                child: Row(children: [brand, const Spacer(), account])),
+            Row(children: [
+              const Padding(
+                padding: EdgeInsets.only(left: 14),
+                child: BrandMark(),
+              ),
+              const Spacer(),
+              menu,
+            ]),
             tabs,
             Padding(
-                padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
-                child: _SearchBox(controller: search)),
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+              child: field,
+            ),
           ]);
         }
         return Padding(
           padding: const EdgeInsets.fromLTRB(22, 8, 0, 8),
           child: Row(children: [
-            brand,
+            const BrandMark(),
             const SizedBox(width: 28),
             Expanded(
-                child: Center(
-                    child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 520),
-                        child: _SearchBox(controller: search)))),
-            const SizedBox(width: 20),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: field,
+                ),
+              ),
+            ),
             tabs,
-            account
+            menu,
           ]),
         );
       }),
@@ -276,339 +400,124 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _SearchBox extends StatelessWidget {
-  const _SearchBox({required this.controller});
-  final TextEditingController controller;
-  @override
-  Widget build(BuildContext context) => Container(
-      height: 40,
-      color: Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF121212)
-          : const Color(0xFFF5F6F8),
-      child: TextField(
-          controller: controller,
-          textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(
-              prefixIcon: Icon(CupertinoIcons.search, size: 18),
-              hintText: '搜索 FuckXter',
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(vertical: 10))));
-}
-
 class _Tab extends StatelessWidget {
-  const _Tab(
-      {required this.label,
-      required this.value,
-      required this.selected,
-      required this.onTap});
-  final String label, value, selected;
+  const _Tab({
+    required this.label,
+    required this.value,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final String selected;
   final ValueChanged<String> onTap;
+
   @override
   Widget build(BuildContext context) {
     final active = value == selected;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: TextButton(
-            onPressed: () => onTap(value),
-            style: TextButton.styleFrom(
-                foregroundColor: active
-                    ? (dark ? Colors.black : Colors.white)
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-                backgroundColor: active
-                    ? (dark ? const Color(0xFFF2F4F6) : const Color(0xFF101215))
-                    : Colors.transparent,
-                shape: const RoundedRectangleBorder(),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
-            child: Text(label,
-                style: TextStyle(
-                    fontWeight: active ? FontWeight.w800 : FontWeight.w600))));
-  }
-}
-
-class _Composer extends StatefulWidget {
-  const _Composer(
-      {required this.controller,
-      required this.posting,
-      required this.onSubmit});
-  final TextEditingController controller;
-  final bool posting;
-  final VoidCallback onSubmit;
-  @override
-  State<_Composer> createState() => _ComposerState();
-}
-
-class _ComposerState extends State<_Composer> {
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_changed);
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_changed);
-    super.dispose();
-  }
-
-  void _changed() => setState(() {});
-  @override
-  Widget build(BuildContext context) => Center(
-      child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 980),
-          child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              decoration: BoxDecoration(
-                  border: Border(
-                      bottom:
-                          BorderSide(color: Theme.of(context).dividerColor))),
-              child:
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const _Avatar(name: '?', size: 42),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: Column(children: [
-                  TextField(
-                      controller: widget.controller,
-                      maxLength: 1000,
-                      maxLines: null,
-                      minLines: 2,
-                      decoration: const InputDecoration(
-                          hintText: '有什么新鲜事？',
-                          counterText: '',
-                          border: InputBorder.none)),
-                  const Divider(height: 1),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    IconButton(
-                        onPressed: null,
-                        icon: const Icon(CupertinoIcons.paperclip, size: 20)),
-                    Text('${widget.controller.text.characters.length} / 1000',
-                        style: Theme.of(context).textTheme.labelSmall),
-                    const Spacer(),
-                    FilledButton(
-                        onPressed: widget.controller.text.trim().isEmpty ||
-                                widget.posting
-                            ? null
-                            : widget.onSubmit,
-                        child: Text(widget.posting ? '发送中…' : '发帖'))
-                  ])
-                ]))
-              ]))));
-}
-
-class PostCard extends StatefulWidget {
-  const PostCard({super.key, required this.post, required this.api});
-  final Post post;
-  final FuckXterApi api;
-  @override
-  State<PostCard> createState() => _PostCardState();
-}
-
-class _PostCardState extends State<PostCard> {
-  late bool liked = widget.post.liked;
-  late bool reposted = widget.post.reposted;
-  late bool saved = widget.post.saved;
-  @override
-  Widget build(BuildContext context) {
-    final p = widget.post;
-    return Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
-        decoration: BoxDecoration(
-            border: Border.all(color: Theme.of(context).dividerColor)),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _Avatar(
-              name: p.author.name,
-              size: 44,
-              url: p.author.avatarUrl == null
-                  ? null
-                  : widget.api.mediaUri(p.author.avatarUrl!).toString()),
-          const SizedBox(width: 12),
-          Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 6,
-                    children: [
-                      Text(p.author.name,
-                          style: const TextStyle(fontWeight: FontWeight.w800)),
-                      if (p.author.verified)
-                        const Icon(Icons.verified,
-                            size: 15, color: Color(0xFF5B7AA8)),
-                      Text('@${p.author.handle} · ${_relative(p.createdAt)}',
-                          style: Theme.of(context).textTheme.bodySmall)
-                    ]),
-                const SizedBox(height: 7),
-                Text(p.text,
-                    style: const TextStyle(fontSize: 15.5, height: 1.45)),
-                if (p.media != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: _NetworkImage(
-                        url: widget.api.mediaUri(p.media!.url).toString(),
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _Action(
-                          icon: CupertinoIcons.chat_bubble,
-                          value: p.stats.replies),
-                      _Action(
-                          icon: CupertinoIcons.repeat,
-                          value: p.stats.reposts +
-                              (reposted && !p.reposted ? 1 : 0),
-                          active: reposted,
-                          activeColor: const Color(0xFF00BA7C),
-                          onTap: () => setState(() => reposted = !reposted)),
-                      _Action(
-                          icon: liked
-                              ? CupertinoIcons.heart_fill
-                              : CupertinoIcons.heart,
-                          value: p.stats.likes + (liked && !p.liked ? 1 : 0),
-                          active: liked,
-                          activeColor: const Color(0xFFF91880),
-                          onTap: () => setState(() => liked = !liked)),
-                      _Action(
-                          icon: saved
-                              ? CupertinoIcons.bookmark_fill
-                              : CupertinoIcons.bookmark,
-                          active: saved,
-                          onTap: () => setState(() => saved = !saved)),
-                      _Action(
-                          icon: CupertinoIcons.chart_bar, value: p.stats.views),
-                    ])
-              ]))
-        ]));
-  }
-}
-
-class _Action extends StatelessWidget {
-  const _Action(
-      {required this.icon,
-      this.value,
-      this.active = false,
-      this.activeColor = const Color(0xFF5B7AA8),
-      this.onTap});
-  final IconData icon;
-  final int? value;
-  final bool active;
-  final Color activeColor;
-  final VoidCallback? onTap;
-  @override
-  Widget build(BuildContext context) => InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Row(children: [
-            Icon(icon,
-                size: 17,
-                color: active
-                    ? activeColor
-                    : Theme.of(context).colorScheme.onSurfaceVariant),
-            if (value != null) ...[
-              const SizedBox(width: 5),
-              Text(_compact(value!),
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: active
-                          ? activeColor
-                          : Theme.of(context).colorScheme.onSurfaceVariant))
-            ]
-          ])));
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, required this.size, this.url});
-  final String name;
-  final double size;
-  final String? url;
-  @override
-  Widget build(BuildContext context) {
-    final fallback = Container(
-        color: const Color(0xFF5B7AA8),
-        alignment: Alignment.center,
-        child: Text(name.characters.firstOrNull?.toUpperCase() ?? '?',
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w800)));
-    return ClipOval(
-        child: SizedBox.square(
-            dimension: size,
-            child: url == null
-                ? fallback
-                : _NetworkImage(
-                    url: url!, fit: BoxFit.cover, fallback: fallback)));
-  }
-}
-
-class _NetworkImage extends StatelessWidget {
-  const _NetworkImage({
-    required this.url,
-    required this.fit,
-    this.width,
-    this.fallback,
-  });
-
-  final String url;
-  final BoxFit fit;
-  final double? width;
-  final Widget? fallback;
-
-  @override
-  Widget build(BuildContext context) {
-    final error = fallback ??
-        const SizedBox(
-          height: 120,
-          child: Center(child: Icon(Icons.broken_image_outlined)),
-        );
-    return Image.network(
-      url,
-      fit: fit,
-      width: width,
-      errorBuilder: (_, __, ___) => AvifImage.network(
-        url,
-        fit: fit,
-        width: width,
-        errorBuilder: (_, __, ___) => error,
+    return TextButton(
+      onPressed: () => onTap(value),
+      style: TextButton.styleFrom(
+        foregroundColor: active
+            ? (dark ? Colors.black : Colors.white)
+            : Theme.of(context).colorScheme.onSurfaceVariant,
+        backgroundColor: active
+            ? (dark ? const Color(0xFFF2F4F6) : const Color(0xFF101215))
+            : Colors.transparent,
+        shape: const RoundedRectangleBorder(),
       ),
+      child: Text(label,
+          style: TextStyle(
+              fontWeight: active ? FontWeight.w800 : FontWeight.w600)),
     );
   }
 }
 
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.error, required this.onRetry});
-  final String error;
-  final VoidCallback onRetry;
+class _Composer extends StatelessWidget {
+  const _Composer({
+    required this.controller,
+    required this.posting,
+    required this.visibility,
+    required this.mediaCount,
+    required this.name,
+    required this.avatarUrl,
+    required this.imageHeaders,
+    required this.onVisibility,
+    required this.onAttach,
+    required this.onSubmit,
+  });
+
+  final TextEditingController controller;
+  final bool posting;
+  final String visibility;
+  final int mediaCount;
+  final String name;
+  final String? avatarUrl;
+  final Map<String, String> imageHeaders;
+  final ValueChanged<String> onVisibility;
+  final VoidCallback onAttach;
+  final VoidCallback onSubmit;
+
   @override
-  Widget build(BuildContext context) => Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(CupertinoIcons.wifi_exclamationmark, size: 36),
-        const SizedBox(height: 12),
-        Text(error),
-        const SizedBox(height: 14),
-        OutlinedButton(onPressed: onRetry, child: const Text('重新加载'))
-      ]));
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 980),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Avatar(
+              name: name,
+              size: 42,
+              url: avatarUrl,
+              headers: imageHeaders,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(children: [
+                TextField(
+                  controller: controller,
+                  maxLength: 1000,
+                  minLines: 2,
+                  maxLines: null,
+                  decoration: const InputDecoration(
+                    hintText: '有什么新鲜事？',
+                    counterText: '',
+                    border: InputBorder.none,
+                  ),
+                ),
+                Row(children: [
+                  IconButton(
+                    onPressed: onAttach,
+                    icon: const Icon(CupertinoIcons.paperclip, size: 20),
+                  ),
+                  if (mediaCount > 0) Text('$mediaCount 张图片'),
+                  PopupMenuButton<String>(
+                    initialValue: visibility,
+                    onSelected: onVisibility,
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'public', child: Text('公开')),
+                      PopupMenuItem(value: 'mutual', child: Text('互关可见')),
+                      PopupMenuItem(value: 'private', child: Text('仅自己')),
+                    ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(visibilityLabel(visibility)),
+                    ),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: posting ? null : onSubmit,
+                    child: Text(posting ? '发送中…' : '发帖'),
+                  ),
+                ]),
+              ]),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
 }
-
-String _relative(DateTime value) {
-  final d = DateTime.now().difference(value.toLocal());
-  if (d.inMinutes < 1) return '刚刚';
-  if (d.inHours < 1) return '${d.inMinutes} 分钟';
-  if (d.inDays < 1) return '${d.inHours} 小时';
-  if (d.inDays < 30) return '${d.inDays} 天';
-  return '${value.month}月${value.day}日';
-}
-
-String _compact(int value) =>
-    value >= 10000 ? '${(value / 10000).toStringAsFixed(1)}万' : '$value';

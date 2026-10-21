@@ -86,8 +86,7 @@ void main() {
 }
 
 class _Client extends MockClient {
-  _Client(Future<http.Response> Function(http.Request) handler)
-    : super(handler);
+  _Client(super.fn);
 
   int closes = 0;
   final aborts = <Future<void>>[];

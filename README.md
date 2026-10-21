@@ -1,24 +1,17 @@
 # fuckxter-app
 
-FuckXter 的 Flutter 客户端，对接 `https://api.fuckxter.site`。
+FuckXter 的 Flutter 客户端，和网页端使用同一个API。
 
-时间线（推荐 / 实时 / 关注）、发帖和图片、点赞、转发、引用、收藏、评论、搜索、用户主页与关注、通知、私信、浏览记录、登录注册（含双重验证和恢复码）以及资料设置，都在这个应用里完成。品牌图放在 `assets/brand/`。
+## 🔒 签名
 
-## ⬇️ Init
-
-Make sure you have env of flutter
-
-```bash
-flutter run -d [your_os]
+### 对于Android .apk
+```text
+证书指纹 (SHA-256): 94:CC:94:36:7A:5E:16:5F:8B:86:CF:7F:50:80:07:12:F3:9C:09:54:7C:EF:EF:5B:3B:21:ED:22:76:88:33:66
 ```
 
-It will be auto install depend and compile
+## 🔧 对于开发者
 
-## ⚖️ LICENSE
-
-FuckXter-app licensed under the [MoPL](https://867678.xyz/docs/mopl)
-
-## 开发与验证
+### 初始化
 
 使用 stable Flutter。CI 执行格式检查、静态分析、测试及 Android、Linux、Windows、macOS 构建。Linux 需要 `libsecret-1-dev`（构建）及运行中的系统钥匙串服务（登录）。
 
@@ -26,7 +19,7 @@ FuckXter-app licensed under the [MoPL](https://867678.xyz/docs/mopl)
 
 登录凭据保存到系统安全存储，升级时清除旧版明文会话与账号缓存，需要重新登录。私有图片缓存按会话隔离，图片请求只接受 API 同源地址且禁止重定向。
 
-## 桌面安装包
+### 安装包
 
 GitHub Actions 在每次主分支提交后构建并发布：
 
@@ -46,35 +39,6 @@ Linux 包为 x86_64，依赖 GTK 3、libsecret 和系统钥匙串服务（如 GN
 
 CI 检查 deb/rpm/pacman 包的版本元数据、安装 deb 并检查程序和资源、解包检查 AppImage，以及校验 DMG 和应用内的版本号。
 
-## Android 发布签名
+## ⚖️ LICENSE
 
-Release 必须使用同一份私钥签名，禁止使用每次 CI 随机生成的 debug 密钥。包名保持 `com.example.fuckxter_app`，升级时同时递增 `pubspec.yaml` 的版本和构建号。
-
-在仓库 Settings → Secrets and variables → Actions 配置以下 Secrets：
-
-| Secret | 内容 |
-| --- | --- |
-| `ANDROID_KEYSTORE_BASE64` | 固定发布 keystore 的 Base64 内容 |
-| `ANDROID_STORE_PASSWORD` | keystore 密码 |
-| `ANDROID_KEY_ALIAS` | 签名密钥别名 |
-| `ANDROID_KEY_PASSWORD` | 签名密钥密码 |
-
-优先使用已安装版本的原始 keystore。若原来的临时 debug 私钥已丢失，就无法覆盖安装旧版；备份所需数据后卸载旧版，再安装固定密钥签名的版本，此后可正常覆盖升级。APK 中的证书无法还原私钥。
-
-没有旧密钥时，在安全的本地环境生成一次，并备份 keystore 和密码；不要提交私钥到仓库：
-
-```bash
-keytool -genkeypair -keystore release.jks -alias fuckxter -keyalg RSA -keysize 3072 -validity 10000
-base64 < release.jks | tr -d '\n'
-```
-
-将输出填入 `ANDROID_KEYSTORE_BASE64`，其余三项填写生成时使用的密码和别名。缺少配置时 Android 发布任务会失败，避免发布无法持续升级的 APK。PR 构建使用 debug 包，不发布。
-
-本地发布构建使用被 Git 忽略的 `android/key.properties`：
-
-```properties
-storeFile=/absolute/path/to/release.jks
-storePassword=your-store-password
-keyAlias=fuckxter
-keyPassword=your-key-password
-```
+FuckXter-app licensed under the [MoPL](https://867678.xyz/docs/mopl)

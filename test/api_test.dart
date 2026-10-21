@@ -8,6 +8,20 @@ import 'package:fuckxter_app/services/fuckxter_api.dart';
 import 'package:fuckxter_app/services/media_image.dart';
 
 void main() {
+  test(
+    'invalid JSON response shapes fail instead of becoming empty results',
+    () async {
+      final api = FuckXterApi(
+        client: MockClient((_) async => http.Response('[]', 200)),
+      );
+      addTearDown(api.close);
+      await expectLater(
+        api.timeline(tab: 'latest'),
+        throwsA(isA<ApiException>()),
+      );
+    },
+  );
+
   test('media URLs cannot send session credentials to another origin', () {
     for (final path in [
       'https://evil.example/media/photo',

@@ -14,6 +14,101 @@ import 'package:fuckxter_app/session.dart';
 import 'package:fuckxter_app/screens/flows.dart';
 
 void main() {
+  testWidgets('profile data and posts start loading together', (tester) async {
+    final profile = Completer<http.Response>();
+    final posts = Completer<http.Response>();
+    final paths = <String>[];
+    final api = FuckXterApi(
+      client: MockClient((request) {
+        paths.add(request.url.path);
+        return request.url.path.endsWith('/posts')
+            ? posts.future
+            : profile.future;
+      }),
+    );
+    addTearDown(api.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(
+          session: AppSession(api: api)..ready = true,
+          handle: 'tester',
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(paths, containsAll(['/users/tester', '/users/tester/posts']));
+    profile.complete(http.Response('{"name":"Tester","handle":"tester"}', 200));
+    posts.complete(http.Response('{"posts":[]}', 200));
+    await tester.pumpAndSettle();
+    expect(find.text('还没有帖子'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('post details and comments start loading together', (
+    tester,
+  ) async {
+    final details = Completer<http.Response>();
+    final comments = Completer<http.Response>();
+    final post = _post('parallel');
+    final paths = <String>[];
+    final api = FuckXterApi(
+      client: MockClient((request) {
+        paths.add(request.url.path);
+        return request.url.path.endsWith('/comments')
+            ? comments.future
+            : details.future;
+      }),
+    );
+    addTearDown(api.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PostScreen(
+          session: AppSession(api: api)..ready = true,
+          post: Post.fromJson(post),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(
+      paths,
+      containsAll(['/posts/tester/parallel', '/posts/parallel/comments']),
+    );
+    details.complete(http.Response(jsonEncode(post), 200));
+    comments.complete(http.Response('{"comments":[]}', 200));
+    await tester.pumpAndSettle();
+    expect(find.text('parallel'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('large history builds visible entries on demand', (tester) async {
+    final api = FuckXterApi(
+      client: MockClient((_) async => http.Response('{}', 200)),
+    );
+    addTearDown(api.close);
+    final session = AppSession(api: api)..ready = true;
+    session.history = List.generate(
+      200,
+      (index) => HistoryItem(
+        handle: 'tester',
+        slug: '$index',
+        name: 'Entry $index',
+        text: 'Text $index',
+        at: '2026-10-21T00:00:00Z',
+      ),
+    );
+    await tester.pumpWidget(MaterialApp(home: HistoryScreen(session: session)));
+    await tester.pumpAndSettle();
+    expect(find.byType(ListTile).evaluate().length, lessThan(30));
+    expect(find.text('Entry 0'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Entry 199'),
+      600,
+      maxScrolls: 40,
+    );
+    expect(find.text('Entry 199'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'renders the shell on a narrow screen and retries an empty feed',
     (tester) async {

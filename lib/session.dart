@@ -23,8 +23,6 @@ class AppSession extends ChangeNotifier {
   Future<void> bootstrap() async {
     try {
       _prefs = await SharedPreferences.getInstance();
-      await _prefs?.remove('fk_session');
-      await _prefs?.remove('fk_account');
     } catch (_) {
       _prefs = null;
     }

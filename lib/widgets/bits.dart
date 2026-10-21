@@ -143,10 +143,6 @@ class BrandMark extends StatelessWidget {
         height: height,
         color: dark ? const Color(0xFFF2F4F6) : const Color(0xFF101215),
         colorBlendMode: BlendMode.srcIn,
-        errorBuilder: (_, __, ___) => const Text(
-          'FuckXter',
-          style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900),
-        ),
       ),
     );
   }

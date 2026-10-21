@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -9,6 +10,8 @@ import 'fuckxter_api.dart';
 
 class MediaImage extends ImageProvider<MediaImage> {
   const MediaImage(this.uri, {this.cookie});
+
+  static final _client = http.Client();
 
   final Uri uri;
   final String? cookie;
@@ -25,34 +28,45 @@ class MediaImage extends ImageProvider<MediaImage> {
     if (!FuckXterApi.isMediaUri(uri)) {
       throw const ApiException('图片地址无效。', 0);
     }
-    final client = http.Client();
+    final abort = Completer<void>();
     try {
-      final request = http.Request('GET', uri)..followRedirects = false;
+      final request = http.AbortableRequest(
+        'GET',
+        uri,
+        abortTrigger: abort.future,
+      )..followRedirects = false;
       request.headers['Accept'] = 'image/webp';
-      if (!kIsWeb && cookie != null) request.headers['Cookie'] = cookie!;
-      final bytes = await (() async {
-        final response = await client.send(request);
-        if (response.statusCode != 200 ||
-            response.headers['content-type']?.split(';').first !=
-                'image/webp') {
-          throw const ApiException('图片加载失败，请重试。', 0);
-        }
-        const limit = 30 * 1024 * 1024;
-        if ((response.contentLength ?? 0) > limit) {
-          throw const ApiException('图片过大。', 413);
-        }
-        final bytes = BytesBuilder(copy: false);
-        await for (final chunk in response.stream) {
-          if (bytes.length + chunk.length > limit) {
-            throw const ApiException('图片过大。', 413);
-          }
-          bytes.add(chunk);
-        }
-        return bytes.takeBytes();
-      })().timeout(const Duration(seconds: 30));
+      if (cookie != null) request.headers['Cookie'] = cookie!;
+      final bytes =
+          await (() async {
+            final response = await _client.send(request);
+            if (response.statusCode != 200 ||
+                response.headers['content-type']?.split(';').first !=
+                    'image/webp') {
+              throw const ApiException('图片加载失败，请重试。', 0);
+            }
+            const limit = 30 * 1024 * 1024;
+            if ((response.contentLength ?? 0) > limit) {
+              throw const ApiException('图片过大。', 413);
+            }
+            final bytes = BytesBuilder(copy: false);
+            await for (final chunk in response.stream) {
+              if (bytes.length + chunk.length > limit) {
+                throw const ApiException('图片过大。', 413);
+              }
+              bytes.add(chunk);
+            }
+            return bytes.takeBytes();
+          })().timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              abort.complete();
+              throw TimeoutException('图片加载超时，请重试。');
+            },
+          );
       return await decode(await ui.ImmutableBuffer.fromUint8List(bytes));
     } finally {
-      client.close();
+      if (!abort.isCompleted) abort.complete();
     }
   }
 

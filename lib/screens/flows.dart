@@ -340,10 +340,12 @@ class _PostScreenState extends State<PostScreen> {
       error = null;
     });
     try {
-      final fresh = post.slug.isEmpty
-          ? post
-          : await widget.session.api.postByPath(post.author.handle, post.slug);
-      final items = await widget.session.api.comments(post.id);
+      final (fresh, items) = await (
+        post.slug.isEmpty
+            ? Future.value(post)
+            : widget.session.api.postByPath(post.author.handle, post.slug),
+        widget.session.api.comments(post.id),
+      ).wait;
       if (!mounted) return;
       setState(() {
         if (fresh != null) post = fresh;
@@ -565,8 +567,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       error = null;
     });
     try {
-      final profile = await widget.session.api.profile(widget.handle);
-      final items = await widget.session.api.postsByUser(widget.handle);
+      final (profile, items) = await (
+        widget.session.api.profile(widget.handle),
+        widget.session.api.postsByUser(widget.handle),
+      ).wait;
       if (!mounted) return;
       setState(() {
         user = profile;
@@ -827,18 +831,19 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
           ? EmptyHint('$error')
           : users.isEmpty
           ? const EmptyHint('这里还没有人')
-          : ListView(
-              children: [
-                for (final user in users)
-                  ListTile(
-                    leading: Avatar(name: user.name, size: 40),
-                    title: Text(user.name),
-                    subtitle: Text('@${user.handle}\n${user.bio}'),
-                    isThreeLine: user.bio.isNotEmpty,
-                    onTap: () =>
-                        openProfile(context, widget.session, user.handle),
-                  ),
-              ],
+          : ListView.builder(
+              itemCount: users.length,
+              itemBuilder: (_, index) {
+                final user = users[index];
+                return ListTile(
+                  leading: Avatar(name: user.name, size: 40),
+                  title: Text(user.name),
+                  subtitle: Text('@${user.handle}\n${user.bio}'),
+                  isThreeLine: user.bio.isNotEmpty,
+                  onTap: () =>
+                      openProfile(context, widget.session, user.handle),
+                );
+              },
             ),
     );
   }
@@ -896,35 +901,36 @@ class _NoticesScreenState extends State<NoticesScreen> {
           ? EmptyHint('$error')
           : notices.isEmpty
           ? const EmptyHint('没有通知')
-          : ListView(
-              children: [
-                for (final notice in notices)
-                  ListTile(
-                    title: Text(_label(notice)),
-                    subtitle: Text(
-                      notice.commentText ??
-                          notice.postText ??
-                          relativeTime(notice.createdAt),
-                    ),
-                    onTap: notice.postHandle == null || notice.postSlug == null
-                        ? (notice.actor == null
-                              ? null
-                              : () => openProfile(
-                                  context,
-                                  widget.session,
-                                  notice.actor!.handle,
-                                ))
-                        : () async {
-                            final post = await widget.session.api.postByPath(
-                              notice.postHandle!,
-                              notice.postSlug!,
-                            );
-                            if (post != null && context.mounted) {
-                              openPost(context, widget.session, post);
-                            }
-                          },
+          : ListView.builder(
+              itemCount: notices.length,
+              itemBuilder: (_, index) {
+                final notice = notices[index];
+                return ListTile(
+                  title: Text(_label(notice)),
+                  subtitle: Text(
+                    notice.commentText ??
+                        notice.postText ??
+                        relativeTime(notice.createdAt),
                   ),
-              ],
+                  onTap: notice.postHandle == null || notice.postSlug == null
+                      ? (notice.actor == null
+                            ? null
+                            : () => openProfile(
+                                context,
+                                widget.session,
+                                notice.actor!.handle,
+                              ))
+                      : () async {
+                          final post = await widget.session.api.postByPath(
+                            notice.postHandle!,
+                            notice.postSlug!,
+                          );
+                          if (post != null && context.mounted) {
+                            openPost(context, widget.session, post);
+                          }
+                        },
+                );
+              },
             ),
     );
   }
@@ -972,27 +978,28 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ? const EmptyHint('还没有会话。到别人的主页可以发起私信。')
           : RefreshIndicator(
               onRefresh: _load,
-              child: ListView(
-                children: [
-                  for (final thread in threads)
-                    ListTile(
-                      leading: Avatar(
-                        name: thread.other.name,
-                        size: 40,
-                        url: thread.other.avatarUrl,
-                      ),
-                      title: Text(thread.other.name),
-                      subtitle: Text(thread.lastBody),
-                      trailing: thread.unread == 0
-                          ? null
-                          : Text('${thread.unread}'),
-                      onTap: () => openMessages(
-                        context,
-                        widget.session,
-                        handle: thread.other.handle,
-                      ),
+              child: ListView.builder(
+                itemCount: threads.length,
+                itemBuilder: (_, index) {
+                  final thread = threads[index];
+                  return ListTile(
+                    leading: Avatar(
+                      name: thread.other.name,
+                      size: 40,
+                      url: thread.other.avatarUrl,
                     ),
-                ],
+                    title: Text(thread.other.name),
+                    subtitle: Text(thread.lastBody),
+                    trailing: thread.unread == 0
+                        ? null
+                        : Text('${thread.unread}'),
+                    onTap: () => openMessages(
+                      context,
+                      widget.session,
+                      handle: thread.other.handle,
+                    ),
+                  );
+                },
               ),
             ),
     );
@@ -1217,23 +1224,24 @@ class HistoryScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('浏览记录')),
       body: items.isEmpty
           ? const EmptyHint('打开过的帖子会记在这里')
-          : ListView(
-              children: [
-                for (final item in items)
-                  ListTile(
-                    title: Text(item.name),
-                    subtitle: Text(item.text),
-                    onTap: () async {
-                      final post = await session.api.postByPath(
-                        item.handle,
-                        item.slug,
-                      );
-                      if (post != null && context.mounted) {
-                        openPost(context, session, post);
-                      }
-                    },
-                  ),
-              ],
+          : ListView.builder(
+              itemCount: items.length,
+              itemBuilder: (_, index) {
+                final item = items[index];
+                return ListTile(
+                  title: Text(item.name),
+                  subtitle: Text(item.text),
+                  onTap: () async {
+                    final post = await session.api.postByPath(
+                      item.handle,
+                      item.slug,
+                    );
+                    if (post != null && context.mounted) {
+                      openPost(context, session, post);
+                    }
+                  },
+                );
+              },
             ),
     );
   }

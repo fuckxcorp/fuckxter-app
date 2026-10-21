@@ -1,14 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/models.dart';
-import 'http_client.dart' if (dart.library.html) 'http_client_web.dart';
 
 class FuckXterApi {
-  FuckXterApi({http.Client? client}) : _client = client ?? createHttpClient();
+  FuckXterApi({http.Client? client}) : _client = client ?? http.Client();
 
   static const origin = 'https://api.fuckxter.site';
   static const site = 'https://fuckxter.site';
@@ -42,7 +40,7 @@ class FuckXterApi {
   }
 
   Map<String, String> get imageHeaders {
-    if (kIsWeb || cookie == null || cookie!.isEmpty) return const {};
+    if (cookie == null || cookie!.isEmpty) return const {};
     return {'Cookie': 'fk_session=$cookie'};
   }
 
@@ -493,8 +491,7 @@ class FuckXterApi {
   Map<String, dynamic> _decode(http.Response response) {
     final decoded = jsonDecode(response.body);
     if (decoded is Map<String, dynamic>) return decoded;
-    if (decoded is Map) return Map<String, dynamic>.from(decoded);
-    return const {};
+    throw const ApiException('响应格式无效。', 0);
   }
 
   Future<http.Response> _raw(

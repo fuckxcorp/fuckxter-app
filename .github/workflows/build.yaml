@@ -32,8 +32,9 @@ jobs:
         id: get_version
         shell: bash
         run: |
-          vercion=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
-          echo "version=$vercion" >> "$GITHUB_OUTPUT"
+          source scripts/version.sh
+          echo "version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$APP_BUILD" >> "$GITHUB_OUTPUT"
 
       - name: Install Flutter
         uses: subosito/flutter-action@main
@@ -47,38 +48,52 @@ jobs:
           flutter pub get
           if [ "${{ matrix.target }}" = "linux" ]; then
             sudo apt-get update
-            sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsecret-1-dev
+            sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsecret-1-dev rpm zstd desktop-file-utils
           fi
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze
           flutter test
 
+      - name: Install Go for Linux packaging
+        if: matrix.target == 'linux'
+        uses: actions/setup-go@main
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Install nFPM
+        if: matrix.target == 'linux'
+        shell: bash
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
       - name: Build!
         shell: bash
         run: |
+          source scripts/version.sh
           mkdir -p release
           case "${{ matrix.target }}" in
             android)
               flutter build apk
-              cp build/app/outputs/flutter-apk/app-release.apk release/
+              cp build/app/outputs/flutter-apk/app-release.apk "release/fuckxter-${APP_VERSION}-${APP_BUILD}-android.apk"
               ;;
             linux)
               flutter build linux
-              tar -C build/linux/x64/release -czf release/fuckxter-linux-x64.tar.gz bundle
+              desktop-file-validate packaging/linux/fuckxter.desktop
+              bash scripts/package-linux.sh
               ;;
             windows)
               flutter build windows
-              tar -C build/windows/x64/runner/Release -acf release/fuckxter-windows-x64.zip .
+              tar -C build/windows/x64/runner/Release -acf "release/fuckxter-${APP_VERSION}-${APP_BUILD}-windows-x64.zip" .
               ;;
             macos)
               flutter build macos
-              tar -C build/macos/Build/Products/Release -czf release/fuckxter-macos.tar.gz fuckxter_app.app
+              bash scripts/package-macos.sh
               ;;
           esac
           ls -la release
 
       - name: Release
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@master
         with:
           tag_name: V${{ steps.get_version.outputs.version }}
@@ -86,6 +101,7 @@ jobs:
           fail_on_unmatched_files: true
           body: |
             # 📝 更新日志
-            - 修复和改进。
+            - 版本来源：pubspec.yaml（${{ steps.get_version.outputs.version }}+${{ steps.get_version.outputs.build }}）。
+            - Linux：pacman / dpkg / RPM 安装包、AppImage；macOS：DMG；Android：APK；Windows：ZIP。
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

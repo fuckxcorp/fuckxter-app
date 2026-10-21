@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=FuckXter
+Comment=FuckXter social client
+Exec=fuckxter
+Icon=fuckxter
+Terminal=false
+Categories=Network;
+StartupWMClass=com.example.fuckxter_app

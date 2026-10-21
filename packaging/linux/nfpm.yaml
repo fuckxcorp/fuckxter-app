@@ -1,0 +1,43 @@
+name: fuckxter-app
+arch: amd64
+platform: linux
+version: ${APP_VERSION}
+release: ${APP_BUILD}
+section: net
+priority: optional
+maintainer: FuckXCorp <fuckxcorp@users.noreply.github.com>
+description: FuckXter social client
+homepage: https://github.com/fuckxcorp/fuckxter-app
+license: MoPL
+contents:
+  - src: build/linux/x64/release/bundle/
+    dst: /opt/fuckxter
+    type: tree
+  - src: /opt/fuckxter/fuckxter_app
+    dst: /usr/bin/fuckxter
+    type: symlink
+  - src: packaging/linux/fuckxter.desktop
+    dst: /usr/share/applications/fuckxter.desktop
+  - src: macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_512.png
+    dst: /usr/share/icons/hicolor/512x512/apps/fuckxter.png
+overrides:
+  deb:
+    depends:
+      - libc6 (>= ${GLIBC_VERSION})
+      - libgtk-3-0
+      - libsecret-1-0
+      - libstdc++6
+    recommends:
+      - gnome-keyring
+  rpm:
+    depends:
+      - glibc >= ${GLIBC_VERSION}
+      - gtk3
+      - libsecret
+      - libstdc++
+  archlinux:
+    depends:
+      - glibc>=${GLIBC_VERSION}
+      - gtk3
+      - libsecret
+      - gcc-libs

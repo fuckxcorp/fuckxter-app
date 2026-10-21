@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="${APPDIR:-$(cd "$(dirname "$0")" && pwd)}"
+exec "$root/usr/lib/fuckxter/fuckxter_app" "$@"

@@ -119,9 +119,6 @@ jobs:
           tag_name: V${{ steps.get_version.outputs.version }}
           files: release/*
           fail_on_unmatched_files: true
-          body: |
-            # 📝 更新日志
-            - 版本来源：pubspec.yaml（${{ steps.get_version.outputs.version }}+${{ steps.get_version.outputs.build }}）。
-            - Linux：pacman / dpkg / RPM 安装包、AppImage；macOS：DMG；Android：APK；Windows：ZIP。
+          body: 修复和改进。
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

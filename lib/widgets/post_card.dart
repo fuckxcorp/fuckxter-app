@@ -67,9 +67,15 @@ class _PostCardState extends State<PostCard> {
   @override
   Widget build(BuildContext context) {
     final shown = post;
+    final compact = MediaQuery.sizeOf(context).width < 720;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 12 : 18,
+        16,
+        compact ? 12 : 18,
+        10,
+      ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
@@ -99,7 +105,7 @@ class _PostCardState extends State<PostCard> {
                   url: shown.author.avatarUrl,
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: compact ? 10 : 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,6 +326,8 @@ class _Quote extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(10),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -346,34 +354,79 @@ class _MediaStrip extends StatelessWidget {
   final List<PostMedia> media;
   final FuckXterApi api;
 
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    height: media.length == 1 ? 260 : 180,
-    child: ListView.separated(
-      scrollDirection: Axis.horizontal,
-      itemCount: media.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 8),
-      itemBuilder: (context, index) => Semantics(
-        button: true,
-        label: '查看图片 ${index + 1}/${media.length} ${media[index].alt}',
-        child: InkWell(
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => _Gallery(media: media, api: api, initial: index),
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: NetImage(
-              url: media[index].url,
-              fit: BoxFit.cover,
-              width: media.length == 1 ? 280 : 180,
-              height: media.length == 1 ? 260 : 180,
-              headers: api.imageHeaders,
-            ),
-          ),
+  Widget _tile(BuildContext context, int index) => Semantics(
+    button: true,
+    label: '查看图片 ${index + 1}/${media.length} ${media[index].alt}',
+    child: InkWell(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => _Gallery(media: media, api: api, initial: index),
         ),
       ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          NetImage(
+            url: media[index].url,
+            fit: BoxFit.cover,
+            headers: api.imageHeaders,
+          ),
+          if (index == 3 && media.length > 4)
+            ColoredBox(
+              color: Colors.black54,
+              child: Center(
+                child: Text(
+                  '+${media.length - 4}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(12),
+    child: AspectRatio(
+      aspectRatio: media.length == 1 ? 4 / 3 : 3 / 2,
+      child: media.length == 1
+          ? _tile(context, 0)
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: media.length < 4
+                      ? _tile(context, 0)
+                      : Column(
+                          children: [
+                            Expanded(child: _tile(context, 0)),
+                            const SizedBox(height: 4),
+                            Expanded(child: _tile(context, 2)),
+                          ],
+                        ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: media.length == 2
+                      ? _tile(context, 1)
+                      : Column(
+                          children: [
+                            Expanded(child: _tile(context, 1)),
+                            const SizedBox(height: 4),
+                            Expanded(
+                              child: _tile(context, media.length == 3 ? 2 : 3),
+                            ),
+                          ],
+                        ),
+                ),
+              ],
+            ),
     ),
   );
 }

@@ -20,6 +20,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final scroll = ScrollController();
   final composer = TextEditingController();
+  final composerFocus = FocusNode();
+  final feeds =
+      <
+        String,
+        ({List<Post> posts, String? cursor, double offset, Object? error})
+      >{};
   final search = TextEditingController();
   final posts = <Post>[];
   final media = <PostMedia>[];
@@ -56,7 +62,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _handle = handle;
     setState(() {});
     if (changed) {
+      feeds.clear();
       posts.clear();
+      if (scroll.hasClients) scroll.jumpTo(0);
       composer.clear();
       media.clear();
       visibility = 'public';
@@ -69,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
     widget.session.removeListener(_onSession);
     scroll.dispose();
     composer.dispose();
+    composerFocus.dispose();
     search.dispose();
     super.dispose();
   }
@@ -106,6 +115,47 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _switchTab(String value) {
+    if (tab == value) return;
+    if (!loading || posts.isNotEmpty) {
+      feeds[tab] = (
+        posts: List.of(posts),
+        cursor: cursor,
+        offset: scroll.hasClients ? scroll.offset : 0,
+        error: error,
+      );
+    }
+    final cached = feeds[value];
+    setState(() {
+      _generation++;
+      tab = value;
+      posts
+        ..clear()
+        ..addAll(cached?.posts ?? const []);
+      cursor = cached?.cursor;
+      error = cached?.error;
+      loading = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || tab != value || !scroll.hasClients) return;
+      scroll.jumpTo(
+        (cached?.offset ?? 0).clamp(0, scroll.position.maxScrollExtent),
+      );
+    });
+    if (cached == null) _load(reset: true);
+  }
+
+  Future<void> _compose() async {
+    if (scroll.hasClients) {
+      await scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOut,
+      );
+    }
+    if (mounted) composerFocus.requestFocus();
+  }
+
   Future<void> _guarded(Future<void> Function() action) async {
     if (widget.session.account == null) {
       final ok = await openLogin(context, widget.session);
@@ -135,6 +185,11 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         composer.clear();
         media.clear();
+        feeds.clear();
+        FocusManager.instance.primaryFocus?.unfocus();
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已发布')));
         await _load(reset: true);
       } catch (error) {
         if (mounted) showError(context, error);
@@ -211,7 +266,65 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!widget.session.ready) {
       return const Scaffold(body: SafeArea(child: LoadingPane()));
     }
+    final compact = MediaQuery.sizeOf(context).width < 720;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Scaffold(
+      floatingActionButton: compact && !keyboard
+          ? FloatingActionButton.small(
+              tooltip: '撰写帖子',
+              onPressed: _compose,
+              child: const Icon(CupertinoIcons.square_pencil),
+            )
+          : null,
+      bottomNavigationBar: compact && !keyboard
+          ? NavigationBar(
+              selectedIndex: 0,
+              height: 64,
+              onDestinationSelected: (index) {
+                switch (index) {
+                  case 0:
+                    if (scroll.hasClients) {
+                      scroll.animateTo(
+                        0,
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOut,
+                      );
+                    }
+                  case 1:
+                    openSearch(context, widget.session, search.text);
+                  case 2:
+                    _openAccount('notices');
+                  case 3:
+                    _openAccount('messages');
+                  case 4:
+                    _openAccount('saved');
+                }
+              },
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(CupertinoIcons.house),
+                  selectedIcon: Icon(CupertinoIcons.house_fill),
+                  label: '首页',
+                ),
+                NavigationDestination(
+                  icon: Icon(CupertinoIcons.search),
+                  label: '搜索',
+                ),
+                NavigationDestination(
+                  icon: Icon(CupertinoIcons.bell),
+                  label: '通知',
+                ),
+                NavigationDestination(
+                  icon: Icon(CupertinoIcons.envelope),
+                  label: '私信',
+                ),
+                NavigationDestination(
+                  icon: Icon(CupertinoIcons.bookmark),
+                  label: '收藏',
+                ),
+              ],
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -221,11 +334,7 @@ class _HomeScreenState extends State<HomeScreen> {
               account: account,
               imageHeaders: widget.session.api.imageHeaders,
               onSearch: () => openSearch(context, widget.session, search.text),
-              onTab: (value) {
-                if (tab == value) return;
-                setState(() => tab = value);
-                _load(reset: true);
-              },
+              onTab: _switchTab,
               onAccount: _openAccount,
             ),
             Expanded(
@@ -233,11 +342,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 onRefresh: () => _load(reset: true),
                 child: CustomScrollView(
                   controller: scroll,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(
                       child: _Composer(
                         controller: composer,
+                        focusNode: composerFocus,
                         posting: posting,
                         visibility: visibility,
                         media: media,
@@ -258,7 +370,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     if (posts.isEmpty && loading)
-                      const SliverFillRemaining(child: LoadingPane())
+                      SliverList.list(
+                        children: const [
+                          _PostPlaceholder(),
+                          _PostPlaceholder(),
+                          _PostPlaceholder(),
+                        ],
+                      )
                     else if (posts.isEmpty && error != null)
                       SliverFillRemaining(
                         child: Center(
@@ -281,7 +399,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     else
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        padding: EdgeInsets.fromLTRB(
+                          compact ? 8 : 16,
+                          12,
+                          compact ? 8 : 16,
+                          0,
+                        ),
                         sliver: SliverList.builder(
                           itemCount: posts.length,
                           itemBuilder: (_, index) {
@@ -296,19 +419,28 @@ class _HomeScreenState extends State<HomeScreen> {
                                   child: PostCard(
                                     post: post,
                                     session: widget.session,
-                                    onChanged: (next) {
+                                    onChanged: (next) => setState(() {
                                       final i = posts.indexWhere(
                                         (item) => item.id == next.id,
                                       );
-                                      if (i >= 0) {
-                                        setState(() => posts[i] = next);
+                                      if (i >= 0) posts[i] = next;
+                                      for (final feed in feeds.values) {
+                                        final i = feed.posts.indexWhere(
+                                          (item) => item.id == next.id,
+                                        );
+                                        if (i >= 0) feed.posts[i] = next;
                                       }
-                                    },
-                                    onDeleted: () => setState(
-                                      () => posts.removeWhere(
+                                    }),
+                                    onDeleted: () => setState(() {
+                                      posts.removeWhere(
                                         (item) => item.id == post.id,
-                                      ),
-                                    ),
+                                      );
+                                      for (final feed in feeds.values) {
+                                        feed.posts.removeWhere(
+                                          (item) => item.id == post.id,
+                                        );
+                                      }
+                                    }),
                                   ),
                                 ),
                               ),
@@ -318,7 +450,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     SliverToBoxAdapter(
                       child: SizedBox(
-                        height: 72,
+                        height: 96,
                         child: Center(
                           child: loading && posts.isNotEmpty
                               ? const CircularProgressIndicator(strokeWidth: 2)
@@ -367,7 +499,6 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final tabs = <Widget>[
       _Tab(label: '推荐', value: 'foryou', selected: tab, onTap: onTab),
       _Tab(label: '实时', value: 'latest', selected: tab, onTap: onTab),
@@ -392,14 +523,19 @@ class _TopBar extends StatelessWidget {
         const PopupMenuItem(value: 'theme', child: Text('切换主题')),
       ],
       child: Container(
-        width: 62,
-        height: 48,
-        color: dark ? const Color(0xFFF2F4F6) : const Color(0xFF101215),
+        width: 44,
+        height: 44,
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          shape: BoxShape.circle,
+          border: Border.all(color: Theme.of(context).dividerColor),
+        ),
         alignment: Alignment.center,
         child: account == null
             ? Icon(
                 CupertinoIcons.person,
-                color: dark ? Colors.black : Colors.white,
+                color: Theme.of(context).colorScheme.onSurface,
               )
             : Avatar(
                 name: account!.profile.name,
@@ -446,7 +582,12 @@ class _TopBar extends StatelessWidget {
                     menu,
                   ],
                 ),
-                Row(children: [for (final item in tabs) Expanded(child: item)]),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                  child: Row(
+                    children: [for (final item in tabs) Expanded(child: item)],
+                  ),
+                ),
               ],
             );
           }
@@ -494,21 +635,47 @@ class _Tab extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Semantics(
       selected: active,
-      child: TextButton(
-        onPressed: () => onTap(value),
-        style: TextButton.styleFrom(
-          foregroundColor: active
-              ? (dark ? Colors.black : Colors.white)
-              : Theme.of(context).colorScheme.onSurfaceVariant,
-          backgroundColor: active
-              ? (dark ? const Color(0xFFF2F4F6) : const Color(0xFF101215))
-              : Colors.transparent,
-          shape: const RoundedRectangleBorder(),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: AnimatedContainer(
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            gradient: active
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: dark
+                        ? [const Color(0xFFF2F4F6), const Color(0xFFBDC6D1)]
+                        : [const Color(0xFF101215), const Color(0xFF465362)],
+                  )
+                : null,
+            border: Border.all(
+              color: active
+                  ? Theme.of(context).colorScheme.outline
+                  : Colors.transparent,
+            ),
+          ),
+          child: TextButton(
+            onPressed: () => onTap(value),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(64, 44),
+              foregroundColor: active
+                  ? (dark ? Colors.black : Colors.white)
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
           ),
         ),
       ),
@@ -519,6 +686,7 @@ class _Tab extends StatelessWidget {
 class _Composer extends StatelessWidget {
   const _Composer({
     required this.controller,
+    required this.focusNode,
     required this.posting,
     required this.visibility,
     required this.media,
@@ -534,6 +702,7 @@ class _Composer extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final bool posting;
   final String visibility;
   final List<PostMedia> media;
@@ -569,13 +738,14 @@ class _Composer extends StatelessWidget {
                   children: [
                     TextField(
                       controller: controller,
+                      focusNode: focusNode,
                       enabled: !posting,
                       maxLength: 1000,
                       minLines: 2,
-                      maxLines: null,
+                      maxLines: 6,
                       decoration: const InputDecoration(
                         hintText: '有什么新鲜事？',
-                        counterText: '',
+                        counterStyle: TextStyle(fontSize: 11),
                         border: InputBorder.none,
                       ),
                     ),
@@ -631,6 +801,8 @@ class _Composer extends StatelessWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         PopupMenuButton<String>(
+                          tooltip: '帖子可见范围',
+                          enabled: !posting && !uploading,
                           initialValue: visibility,
                           onSelected: onVisibility,
                           itemBuilder: (_) => const [
@@ -657,6 +829,51 @@ class _Composer extends StatelessWidget {
                           ),
                         ),
                       ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PostPlaceholder extends StatelessWidget {
+  const _PostPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.surfaceContainerHighest;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 680),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(width: 120, height: 14, color: color),
+                    const SizedBox(height: 16),
+                    Container(height: 12, color: color),
+                    const SizedBox(height: 8),
+                    Container(height: 12, color: color),
+                    const SizedBox(height: 8),
+                    FractionallySizedBox(
+                      widthFactor: .65,
+                      child: Container(height: 12, color: color),
                     ),
                   ],
                 ),

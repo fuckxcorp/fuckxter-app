@@ -44,6 +44,193 @@ void main() {
     },
   );
 
+  testWidgets(
+    'switches feeds without showing stale posts and reuses cached results',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final latest = Completer<http.Response>();
+      final calls = <String>[];
+      final api = FuckXterApi(
+        client: MockClient((request) async {
+          final tab = request.url.queryParameters['tab'] ?? '';
+          calls.add(tab);
+          if (tab == 'latest') return latest.future;
+          return http.Response(
+            jsonEncode({
+              'posts': [_post('recommended')],
+            }),
+            200,
+          );
+        }),
+      );
+      addTearDown(api.close);
+      final session = AppSession(api: api)..ready = true;
+      await tester.pumpWidget(FuckXterApp(session: session));
+      await tester.pumpAndSettle();
+      expect(find.text('recommended'), findsOneWidget);
+      await tester.tap(find.text('实时'));
+      await tester.pumpAndSettle();
+      expect(find.text('recommended'), findsNothing);
+      await tester.tap(find.text('推荐'));
+      await tester.pumpAndSettle();
+      expect(find.text('recommended'), findsOneWidget);
+      expect(calls.where((tab) => tab == 'foryou'), hasLength(1));
+      latest.complete(
+        http.Response(
+          jsonEncode({
+            'posts': [_post('old response')],
+          }),
+          200,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('old response'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('restores the scroll position when returning to a timeline', (
+    tester,
+  ) async {
+    final api = FuckXterApi(
+      client: MockClient((request) async {
+        final tab = request.url.queryParameters['tab'];
+        return http.Response(
+          jsonEncode({'posts': List.generate(20, (i) => _post('$tab $i'))}),
+          200,
+        );
+      }),
+    );
+    addTearDown(api.close);
+    await tester.pumpWidget(
+      FuckXterApp(session: AppSession(api: api)..ready = true),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+    await tester.pumpAndSettle();
+    final scroll = tester
+        .widget<CustomScrollView>(find.byType(CustomScrollView))
+        .controller!;
+    final before = scroll.offset;
+    expect(before, greaterThan(0));
+    await tester.tap(find.text('实时'));
+    await tester.pumpAndSettle();
+    expect(scroll.offset, 0);
+    await tester.tap(find.text('推荐'));
+    await tester.pumpAndSettle();
+    expect(scroll.offset, closeTo(before, 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mobile navigation opens search and protects account actions', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final api = FuckXterApi(
+      client: MockClient((request) async => http.Response('{"posts":[]}', 200)),
+    );
+    addTearDown(api.close);
+    await tester.pumpWidget(
+      FuckXterApp(session: AppSession(api: api)..ready = true),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationBar), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('搜索'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(SearchScreen), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('通知'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'compose shortcut focuses the editor and shows the character count',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final api = FuckXterApi(
+        client: MockClient(
+          (request) async => http.Response('{"posts":[]}', 200),
+        ),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        FuckXterApp(session: AppSession(api: api)..ready = true),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('撰写帖子'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus,
+        isTrue,
+      );
+      await tester.enterText(find.byType(TextField), '你好');
+      await tester.pumpAndSettle();
+      expect(find.text('2/1000'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'media grid fits narrow cards and opens the selected gallery image',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final api = FuckXterApi(
+        client: MockClient((request) async => http.Response('{}', 200)),
+      );
+      addTearDown(api.close);
+      final json = _post('Photos')
+        ..['media'] = List.generate(
+          6,
+          (i) => {'url': 'https://invalid.example/$i', 'alt': 'Photo $i'},
+        );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PostCard(
+              post: Post.fromJson(json),
+              session: AppSession(api: api)..ready = true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('+2'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('+2'));
+      await tester.pumpAndSettle();
+      expect(find.text('4 / 6'), findsOneWidget);
+      await tester.tap(find.byTooltip('下一张'));
+      await tester.pumpAndSettle();
+      expect(find.text('5 / 6'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('search ignores older responses and clears empty queries', (
     tester,
   ) async {
@@ -125,3 +312,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 }
+
+Map<String, dynamic> _post(String text) => {
+  'id': text,
+  'slug': text,
+  'author': {'name': 'Tester', 'handle': 'tester'},
+  'text': text,
+  'createdAt': '2026-10-21T00:00:00Z',
+};

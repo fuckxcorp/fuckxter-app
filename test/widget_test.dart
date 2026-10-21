@@ -37,7 +37,9 @@ void main() {
     );
     await tester.pump();
     expect(paths, containsAll(['/users/tester', '/users/tester/posts']));
-    profile.complete(http.Response('{"name":"Tester","handle":"tester"}', 200));
+    profile.complete(
+      http.Response('{"user":{"name":"Tester","handle":"tester"}}', 200),
+    );
     posts.complete(http.Response('{"posts":[]}', 200));
     await tester.pumpAndSettle();
     expect(find.text('还没有帖子'), findsOneWidget);

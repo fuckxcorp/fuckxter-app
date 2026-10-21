@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -14,10 +15,31 @@ class FuckXterApi {
   final http.Client _client;
   String? cookie;
 
-  static String media(String path) =>
-      path.startsWith('http') ? path : '$origin$path';
+  static bool isMediaUri(Uri uri) =>
+      uri.scheme == 'https' &&
+      uri.hasAuthority &&
+      uri.origin == origin &&
+      uri.userInfo.isEmpty &&
+      RegExp(r'^/(media|avatars|headers)/[^/]+$').hasMatch(uri.path);
 
-  Uri mediaUri(String path) => Uri.parse(media(path));
+  static String media(String path) {
+    final uri = Uri.parse(origin).resolve(path);
+    if (!isMediaUri(uri)) {
+      throw const ApiException('图片地址无效。', 0);
+    }
+    return uri.toString();
+  }
+
+  static Uri displayUri(String path, int width) {
+    final uri = Uri.parse(media(path));
+    return uri.replace(
+      queryParameters: {
+        ...uri.queryParameters,
+        'format': 'webp',
+        'width': '$width',
+      },
+    );
+  }
 
   Map<String, String> get imageHeaders {
     if (kIsWeb || cookie == null || cookie!.isEmpty) return const {};
@@ -40,13 +62,17 @@ class FuckXterApi {
     String? code,
     String? recoveryCode,
   }) async {
-    final json = await _json('POST', '/auth/login', body: {
-      'identifier': identifier,
-      'password': password,
-      if (code != null && code.isNotEmpty) 'code': code,
-      if (recoveryCode != null && recoveryCode.isNotEmpty)
-        'recoveryCode': recoveryCode,
-    });
+    final json = await _json(
+      'POST',
+      '/auth/login',
+      body: {
+        'identifier': identifier,
+        'password': password,
+        if (code != null && code.isNotEmpty) 'code': code,
+        if (recoveryCode != null && recoveryCode.isNotEmpty)
+          'recoveryCode': recoveryCode,
+      },
+    );
     final account = json['account'];
     if (account is! Map) {
       throw const ApiException('登录响应中没有账号信息。', 0);
@@ -64,20 +90,29 @@ class FuckXterApi {
     return _account(json);
   }
 
-  Future<Account> changeEmail(
-      {required String email, required String password}) async {
-    final json = await _json('PUT', '/me/email',
-        body: {'email': email, 'password': password});
+  Future<Account> changeEmail({
+    required String email,
+    required String password,
+  }) async {
+    final json = await _json(
+      'PUT',
+      '/me/email',
+      body: {'email': email, 'password': password},
+    );
     return _account(json);
   }
 
-  Future<void> changePassword(
-          {required String current, required String next}) =>
-      _send('PUT', '/me/password', body: {'current': current, 'next': next});
+  Future<void> changePassword({
+    required String current,
+    required String next,
+  }) => _send('PUT', '/me/password', body: {'current': current, 'next': next});
 
   Future<Account> setDmPolicy(String policy) async {
-    final json =
-        await _json('PATCH', '/me/dm-policy', body: {'policy': policy});
+    final json = await _json(
+      'PATCH',
+      '/me/dm-policy',
+      body: {'policy': policy},
+    );
     return _account(json);
   }
 
@@ -101,11 +136,11 @@ class FuckXterApi {
   }
 
   Future<FeedPage> timeline({required String tab, String? cursor}) async {
-    final json = await _json('GET', '/timeline', query: {
-      'tab': tab,
-      'limit': '10',
-      if (cursor != null) 'cursor': cursor,
-    });
+    final json = await _json(
+      'GET',
+      '/timeline',
+      query: {'tab': tab, 'limit': '10', if (cursor != null) 'cursor': cursor},
+    );
     return FeedPage.fromJson(json);
   }
 
@@ -114,20 +149,20 @@ class FuckXterApi {
     List<String> mediaIds = const [],
     String visibility = 'public',
   }) async {
-    final json = await _json('POST', '/posts', body: {
-      'text': text,
-      'mediaIDs': mediaIds,
-      'visibility': visibility,
-    });
+    final json = await _json(
+      'POST',
+      '/posts',
+      body: {'text': text, 'mediaIDs': mediaIds, 'visibility': visibility},
+    );
     return Post.fromJson(json);
   }
 
   Future<Post> updatePost(String id, String text, {String? visibility}) async {
-    final json =
-        await _json('PATCH', '/posts/${Uri.encodeComponent(id)}', body: {
-      'text': text,
-      if (visibility != null) 'visibility': visibility,
-    });
+    final json = await _json(
+      'PATCH',
+      '/posts/${Uri.encodeComponent(id)}',
+      body: {'text': text, if (visibility != null) 'visibility': visibility},
+    );
     return Post.fromJson(json);
   }
 
@@ -136,7 +171,9 @@ class FuckXterApi {
 
   Future<({bool liked, int likes})> setLike(String id, bool liked) async {
     final json = await _json(
-        liked ? 'PUT' : 'DELETE', '/posts/${Uri.encodeComponent(id)}/like');
+      liked ? 'PUT' : 'DELETE',
+      '/posts/${Uri.encodeComponent(id)}/like',
+    );
     return (
       liked: json['liked'] as bool? ?? liked,
       likes: (json['likes'] as num?)?.toInt() ?? 0,
@@ -144,9 +181,13 @@ class FuckXterApi {
   }
 
   Future<({bool reposted, int reposts})> setRepost(
-      String id, bool reposted) async {
-    final json = await _json(reposted ? 'PUT' : 'DELETE',
-        '/posts/${Uri.encodeComponent(id)}/repost');
+    String id,
+    bool reposted,
+  ) async {
+    final json = await _json(
+      reposted ? 'PUT' : 'DELETE',
+      '/posts/${Uri.encodeComponent(id)}/repost',
+    );
     return (
       reposted: json['reposted'] as bool? ?? reposted,
       reposts: (json['reposts'] as num?)?.toInt() ?? 0,
@@ -154,8 +195,11 @@ class FuckXterApi {
   }
 
   Future<Post> quotePost(String id, String text) async {
-    final json = await _json('POST', '/posts/${Uri.encodeComponent(id)}/quote',
-        body: {'text': text});
+    final json = await _json(
+      'POST',
+      '/posts/${Uri.encodeComponent(id)}/quote',
+      body: {'text': text},
+    );
     return Post.fromJson(json);
   }
 
@@ -184,8 +228,10 @@ class FuckXterApi {
   }
 
   Future<List<Post>> postsByUser(String handle) async {
-    final json =
-        await _json('GET', '/users/${Uri.encodeComponent(handle)}/posts');
+    final json = await _json(
+      'GET',
+      '/users/${Uri.encodeComponent(handle)}/posts',
+    );
     return (json['posts'] as List<dynamic>? ?? const [])
         .whereType<Map>()
         .map((item) => Post.fromJson(Map<String, dynamic>.from(item)))
@@ -193,7 +239,8 @@ class FuckXterApi {
   }
 
   Future<({List<UserSummary> users, List<Post> posts})> search(
-      String query) async {
+    String query,
+  ) async {
     final json = await _json('GET', '/search', query: {'q': query});
     return (
       users: (json['users'] as List<dynamic>? ?? const [])
@@ -215,9 +262,13 @@ class FuckXterApi {
   }
 
   Future<({bool following, int followers})> setFollow(
-      String handle, bool following) async {
-    final json = await _json(following ? 'PUT' : 'DELETE',
-        '/users/${Uri.encodeComponent(handle)}/follow');
+    String handle,
+    bool following,
+  ) async {
+    final json = await _json(
+      following ? 'PUT' : 'DELETE',
+      '/users/${Uri.encodeComponent(handle)}/follow',
+    );
     return (
       following: json['following'] as bool? ?? following,
       followers: (json['followers'] as num?)?.toInt() ?? 0,
@@ -225,14 +276,18 @@ class FuckXterApi {
   }
 
   Future<bool> setBlock(String handle, bool blocked) async {
-    final json = await _json(blocked ? 'PUT' : 'DELETE',
-        '/users/${Uri.encodeComponent(handle)}/block');
+    final json = await _json(
+      blocked ? 'PUT' : 'DELETE',
+      '/users/${Uri.encodeComponent(handle)}/block',
+    );
     return json['blocked'] as bool? ?? blocked;
   }
 
   Future<List<UserSummary>> connections(String handle, String kind) async {
-    final json =
-        await _json('GET', '/users/${Uri.encodeComponent(handle)}/$kind');
+    final json = await _json(
+      'GET',
+      '/users/${Uri.encodeComponent(handle)}/$kind',
+    );
     return (json['users'] as List<dynamic>? ?? const [])
         .whereType<Map>()
         .map((item) => UserSummary.fromJson(Map<String, dynamic>.from(item)))
@@ -240,16 +295,22 @@ class FuckXterApi {
   }
 
   Future<List<Comment>> comments(String postId) async {
-    final json =
-        await _json('GET', '/posts/${Uri.encodeComponent(postId)}/comments');
+    final json = await _json(
+      'GET',
+      '/posts/${Uri.encodeComponent(postId)}/comments',
+    );
     return (json['comments'] as List<dynamic>? ?? const [])
         .whereType<Map>()
         .map((item) => Comment.fromJson(Map<String, dynamic>.from(item)))
         .toList();
   }
 
-  Future<Comment> createComment(String postId, String text,
-      {String? parentId, List<String> mediaIds = const []}) async {
+  Future<Comment> createComment(
+    String postId,
+    String text, {
+    String? parentId,
+    List<String> mediaIds = const [],
+  }) async {
     final json = await _json(
       'POST',
       '/posts/${Uri.encodeComponent(postId)}/comments',
@@ -265,12 +326,15 @@ class FuckXterApi {
   }
 
   Future<void> deleteComment(String postId, String commentId) => _send(
-        'DELETE',
-        '/posts/${Uri.encodeComponent(postId)}/comments/${Uri.encodeComponent(commentId)}',
-      );
+    'DELETE',
+    '/posts/${Uri.encodeComponent(postId)}/comments/${Uri.encodeComponent(commentId)}',
+  );
 
   Future<({bool liked, int likes})> setCommentLike(
-      String postId, String commentId, bool liked) async {
+    String postId,
+    String commentId,
+    bool liked,
+  ) async {
     final json = await _json(
       liked ? 'PUT' : 'DELETE',
       '/posts/${Uri.encodeComponent(postId)}/comments/${Uri.encodeComponent(commentId)}/like',
@@ -306,13 +370,14 @@ class FuckXterApi {
   }
 
   Future<({List<DirectMessage> messages, bool canSend, String? hint})>
-      conversation(String handle) async {
+  conversation(String handle) async {
     final json = await _json('GET', '/messages/${Uri.encodeComponent(handle)}');
     return (
       messages: (json['messages'] as List<dynamic>? ?? const [])
           .whereType<Map>()
           .map(
-              (item) => DirectMessage.fromJson(Map<String, dynamic>.from(item)))
+            (item) => DirectMessage.fromJson(Map<String, dynamic>.from(item)),
+          )
           .toList(),
       canSend: json['canSend'] as bool? ?? true,
       hint: json['hint'] as String?,
@@ -320,8 +385,11 @@ class FuckXterApi {
   }
 
   Future<List<DirectMessage>> sendMessage(String handle, String text) async {
-    final json = await _json('POST', '/messages/${Uri.encodeComponent(handle)}',
-        body: {'text': text});
+    final json = await _json(
+      'POST',
+      '/messages/${Uri.encodeComponent(handle)}',
+      body: {'text': text},
+    );
     return (json['messages'] as List<dynamic>? ?? const [])
         .whereType<Map>()
         .map((item) => DirectMessage.fromJson(Map<String, dynamic>.from(item)))
@@ -332,9 +400,9 @@ class FuckXterApi {
       _send('POST', '/messages/${Uri.encodeComponent(handle)}/read');
 
   Future<void> recallMessage(String handle, String messageId) => _send(
-        'DELETE',
-        '/messages/${Uri.encodeComponent(handle)}/${Uri.encodeComponent(messageId)}',
-      );
+    'DELETE',
+    '/messages/${Uri.encodeComponent(handle)}/${Uri.encodeComponent(messageId)}',
+  );
 
   Future<PostMedia> uploadMedia({
     required List<int> bytes,
@@ -346,8 +414,9 @@ class FuckXterApi {
       '/media',
       bytes: bytes,
       headers: {
-        'Content-Type':
-            contentType.isEmpty ? 'application/octet-stream' : contentType,
+        'Content-Type': contentType.isEmpty
+            ? 'application/octet-stream'
+            : contentType,
         'X-File-Name': Uri.encodeComponent(name),
       },
     );
@@ -361,27 +430,35 @@ class FuckXterApi {
     required List<int> bytes,
     required String name,
     required String contentType,
-  }) =>
-      _uploadProfile('/me/avatar', bytes, name, contentType);
+  }) => _uploadProfile('/me/avatar', bytes, name, contentType);
 
   Future<void> uploadHeader({
     required List<int> bytes,
     required String name,
     required String contentType,
-  }) =>
-      _uploadProfile('/me/header', bytes, name, contentType);
+  }) => _uploadProfile('/me/header', bytes, name, contentType);
 
   Future<void> removeAvatar() => _send('DELETE', '/me/avatar');
 
   Future<void> removeHeader() => _send('DELETE', '/me/header');
 
   Future<void> _uploadProfile(
-      String path, List<int> bytes, String name, String contentType) async {
-    await _raw('PUT', path, bytes: bytes, headers: {
-      'Content-Type':
-          contentType.isEmpty ? 'application/octet-stream' : contentType,
-      'X-File-Name': Uri.encodeComponent(name),
-    });
+    String path,
+    List<int> bytes,
+    String name,
+    String contentType,
+  ) async {
+    await _raw(
+      'PUT',
+      path,
+      bytes: bytes,
+      headers: {
+        'Content-Type': contentType.isEmpty
+            ? 'application/octet-stream'
+            : contentType,
+        'X-File-Name': Uri.encodeComponent(name),
+      },
+    );
   }
 
   Account _account(Map<String, dynamic> json) {
@@ -401,8 +478,9 @@ class FuckXterApi {
       path,
       query: query,
       body: body == null ? null : jsonEncode(body),
-      headers:
-          body == null ? const {} : const {'Content-Type': 'application/json'},
+      headers: body == null
+          ? const {}
+          : const {'Content-Type': 'application/json'},
     );
     if (response.statusCode == 204 || response.body.isEmpty) return const {};
     return _decode(response);
@@ -428,7 +506,13 @@ class FuckXterApi {
     List<int>? bytes,
   }) async {
     final uri = Uri.parse('$origin$path').replace(queryParameters: query);
-    final request = http.Request(method, uri);
+    final abort = Completer<void>();
+    final request = http.AbortableRequest(
+      method,
+      uri,
+      abortTrigger: abort.future,
+    )..followRedirects = false;
+    final session = cookie;
     request.headers.addAll({
       'Accept': 'application/json',
       ...imageHeaders,
@@ -439,11 +523,18 @@ class FuckXterApi {
     } else if (body is String) {
       request.body = body;
     }
-    final streamed = await _client.send(request).timeout(
+    final response =
+        await (() async {
+          final streamed = await _client.send(request);
+          return http.Response.fromStream(streamed);
+        })().timeout(
           Duration(seconds: method == 'GET' ? 15 : 30),
+          onTimeout: () {
+            abort.complete();
+            throw TimeoutException('请求超时，请重试。');
+          },
         );
-    final response = await http.Response.fromStream(streamed);
-    _captureCookie(response);
+    if (cookie == session) _captureCookie(response);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException.fromResponse(response);
     }
@@ -452,8 +543,10 @@ class FuckXterApi {
 
   void _captureCookie(http.Response response) {
     final raw = response.headers['set-cookie'];
-    if (raw == null || !raw.contains('fk_session=')) return;
-    final value = raw.split('fk_session=').last.split(';').first.trim();
+    if (raw == null) return;
+    final match = RegExp(r'(?:^|,\s*)fk_session=([^;,\s]*)').firstMatch(raw);
+    if (match == null) return;
+    final value = match.group(1)!;
     cookie = value.isEmpty ? null : value;
   }
 

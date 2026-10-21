@@ -2,12 +2,12 @@ class FeedPage {
   const FeedPage({required this.posts, this.nextCursor});
 
   factory FeedPage.fromJson(Map<String, dynamic> json) => FeedPage(
-        posts: (json['posts'] as List<dynamic>? ?? const [])
-            .whereType<Map>()
-            .map((item) => Post.fromJson(Map<String, dynamic>.from(item)))
-            .toList(),
-        nextCursor: json['nextCursor'] as String?,
-      );
+    posts: (json['posts'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((item) => Post.fromJson(Map<String, dynamic>.from(item)))
+        .toList(),
+    nextCursor: json['nextCursor'] as String?,
+  );
 
   final List<Post> posts;
   final String? nextCursor;
@@ -38,14 +38,17 @@ class Post {
     return Post(
       id: '${json['id'] ?? ''}',
       slug: json['slug'] as String? ?? '',
-      author:
-          Author.fromJson(json['author'] as Map<String, dynamic>? ?? const {}),
+      author: Author.fromJson(
+        json['author'] as Map<String, dynamic>? ?? const {},
+      ),
       text: json['text'] as String? ?? '',
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),
       visibility: json['visibility'] as String? ?? 'public',
       stats: PostStats.fromJson(
-          json['stats'] as Map<String, dynamic>? ?? const {}),
+        json['stats'] as Map<String, dynamic>? ?? const {},
+      ),
       media: mediaList(json['media']),
       liked: viewer['liked'] as bool? ?? false,
       reposted: viewer['reposted'] as bool? ?? false,
@@ -85,24 +88,23 @@ class Post {
     List<PostMedia>? media,
     Post? source,
     bool updateSource = false,
-  }) =>
-      Post(
-        id: id,
-        slug: slug,
-        author: author,
-        text: text ?? this.text,
-        createdAt: createdAt,
-        visibility: visibility ?? this.visibility,
-        stats: stats ?? this.stats,
-        media: media ?? this.media,
-        liked: liked ?? this.liked,
-        reposted: reposted ?? this.reposted,
-        saved: saved ?? this.saved,
-        followingAuthor: followingAuthor,
-        isAuthor: isAuthor,
-        repostKind: repostKind,
-        source: updateSource ? source : this.source,
-      );
+  }) => Post(
+    id: id,
+    slug: slug,
+    author: author,
+    text: text ?? this.text,
+    createdAt: createdAt,
+    visibility: visibility ?? this.visibility,
+    stats: stats ?? this.stats,
+    media: media ?? this.media,
+    liked: liked ?? this.liked,
+    reposted: reposted ?? this.reposted,
+    saved: saved ?? this.saved,
+    followingAuthor: followingAuthor,
+    isAuthor: isAuthor,
+    repostKind: repostKind,
+    source: updateSource ? source : this.source,
+  );
 }
 
 class Author {
@@ -115,12 +117,12 @@ class Author {
   });
 
   factory Author.fromJson(Map<String, dynamic> json) => Author(
-        id: '${json['id'] ?? ''}',
-        name: json['name'] as String? ?? '未命名用户',
-        handle: json['handle'] as String? ?? '',
-        avatarUrl: json['avatarUrl'] as String?,
-        verified: json['verified'] as bool? ?? false,
-      );
+    id: '${json['id'] ?? ''}',
+    name: json['name'] as String? ?? '未命名用户',
+    handle: json['handle'] as String? ?? '',
+    avatarUrl: json['avatarUrl'] as String?,
+    verified: json['verified'] as bool? ?? false,
+  );
 
   final String id;
   final String name;
@@ -138,11 +140,11 @@ class PostStats {
   });
 
   factory PostStats.fromJson(Map<String, dynamic> json) => PostStats(
-        replies: (json['replies'] as num?)?.toInt() ?? 0,
-        reposts: (json['reposts'] as num?)?.toInt() ?? 0,
-        likes: (json['likes'] as num?)?.toInt() ?? 0,
-        views: (json['views'] as num?)?.toInt() ?? 0,
-      );
+    replies: (json['replies'] as num?)?.toInt() ?? 0,
+    reposts: (json['reposts'] as num?)?.toInt() ?? 0,
+    likes: (json['likes'] as num?)?.toInt() ?? 0,
+    views: (json['views'] as num?)?.toInt() ?? 0,
+  );
 
   final int replies;
   final int reposts;
@@ -167,11 +169,11 @@ class PostMedia {
   });
 
   factory PostMedia.fromJson(Map<String, dynamic> json) => PostMedia(
-        id: '${json['id'] ?? ''}',
-        url: json['url'] as String? ?? '',
-        alt: json['alt'] as String? ?? '',
-        contentType: json['contentType'] as String? ?? '',
-      );
+    id: '${json['id'] ?? ''}',
+    url: json['url'] as String? ?? '',
+    alt: json['alt'] as String? ?? '',
+    contentType: json['contentType'] as String? ?? '',
+  );
 
   final String id;
   final String url;
@@ -206,14 +208,14 @@ class AccountProfile {
   });
 
   factory AccountProfile.fromJson(Map<String, dynamic> json) => AccountProfile(
-        name: json['name'] as String? ?? '',
-        handle: json['handle'] as String? ?? '',
-        bio: json['bio'] as String? ?? '',
-        email: json['email'] as String? ?? '',
-        region: json['region'] as String? ?? '',
-        gender: json['gender'] as String? ?? '',
-        birthday: json['birthday'] as String? ?? '',
-      );
+    name: json['name'] as String? ?? '',
+    handle: json['handle'] as String? ?? '',
+    bio: json['bio'] as String? ?? '',
+    email: json['email'] as String? ?? '',
+    region: json['region'] as String? ?? '',
+    gender: json['gender'] as String? ?? '',
+    birthday: json['birthday'] as String? ?? '',
+  );
 
   final String name;
   final String handle;
@@ -236,15 +238,16 @@ class Account {
   });
 
   factory Account.fromJson(Map<String, dynamic> json) => Account(
-        profile: AccountProfile.fromJson(
-            json['profile'] as Map<String, dynamic>? ?? const {}),
-        avatarUrl: json['avatarUrl'] as String?,
-        headerUrl: json['headerUrl'] as String?,
-        twoFactorEnabled: json['twoFactorEnabled'] as bool? ?? false,
-        recoveryCodeCount: (json['recoveryCodeCount'] as num?)?.toInt() ?? 0,
-        dmPolicy: json['dmPolicy'] as String? ?? 'everyone',
-        createdAt: json['createdAt'] as String? ?? '',
-      );
+    profile: AccountProfile.fromJson(
+      json['profile'] as Map<String, dynamic>? ?? const {},
+    ),
+    avatarUrl: json['avatarUrl'] as String?,
+    headerUrl: json['headerUrl'] as String?,
+    twoFactorEnabled: json['twoFactorEnabled'] as bool? ?? false,
+    recoveryCodeCount: (json['recoveryCodeCount'] as num?)?.toInt() ?? 0,
+    dmPolicy: json['dmPolicy'] as String? ?? 'everyone',
+    createdAt: json['createdAt'] as String? ?? '',
+  );
 
   final AccountProfile profile;
   final String? avatarUrl;
@@ -374,10 +377,12 @@ class Comment {
     final parent = json['parent'];
     return Comment(
       id: '${json['id'] ?? ''}',
-      author:
-          Author.fromJson(json['author'] as Map<String, dynamic>? ?? const {}),
+      author: Author.fromJson(
+        json['author'] as Map<String, dynamic>? ?? const {},
+      ),
       text: json['text'] as String? ?? '',
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),
       media: mediaList(json['media']),
       likes: (stats['likes'] as num?)?.toInt() ?? 0,
@@ -414,13 +419,13 @@ class DirectMessage {
   });
 
   factory DirectMessage.fromJson(Map<String, dynamic> json) => DirectMessage(
-        id: '${json['id'] ?? ''}',
-        body: json['body'] as String? ?? '',
-        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
-            DateTime.now(),
-        mine: json['mine'] as bool? ?? false,
-        read: json['read'] as bool? ?? false,
-      );
+    id: '${json['id'] ?? ''}',
+    body: json['body'] as String? ?? '',
+    createdAt:
+        DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+    mine: json['mine'] as bool? ?? false,
+    read: json['read'] as bool? ?? false,
+  );
 
   final String id;
   final String body;
@@ -442,8 +447,9 @@ class Conversation {
     final last = json['lastMessage'];
     return Conversation(
       id: '${json['id'] ?? ''}',
-      other:
-          Author.fromJson(json['other'] as Map<String, dynamic>? ?? const {}),
+      other: Author.fromJson(
+        json['other'] as Map<String, dynamic>? ?? const {},
+      ),
       unread: (json['unread'] as num?)?.toInt() ?? 0,
       lastBody: last is Map ? last['body'] as String? ?? '' : '',
       lastMine: last is Map ? last['mine'] as bool? ?? false : false,
@@ -477,7 +483,8 @@ class AppNotice {
     return AppNotice(
       id: '${json['id'] ?? ''}',
       type: json['type'] as String? ?? 'system',
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),
       read: json['read'] as bool? ?? false,
       actor: actor is Map
@@ -511,20 +518,20 @@ class HistoryItem {
   });
 
   factory HistoryItem.fromJson(Map<String, dynamic> json) => HistoryItem(
-        handle: json['handle'] as String? ?? '',
-        slug: json['slug'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        text: json['text'] as String? ?? '',
-        at: json['at'] as String? ?? '',
-      );
+    handle: json['handle'] as String? ?? '',
+    slug: json['slug'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    text: json['text'] as String? ?? '',
+    at: json['at'] as String? ?? '',
+  );
 
   Map<String, String> toJson() => {
-        'handle': handle,
-        'slug': slug,
-        'name': name,
-        'text': text,
-        'at': at,
-      };
+    'handle': handle,
+    'slug': slug,
+    'name': name,
+    'text': text,
+    'at': at,
+  };
 
   final String handle;
   final String slug;

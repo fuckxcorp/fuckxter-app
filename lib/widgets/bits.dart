@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_avif/flutter_avif.dart';
 
 import '../services/fuckxter_api.dart';
+import '../services/media_image.dart';
 
 class Avatar extends StatelessWidget {
   const Avatar({
@@ -24,9 +27,13 @@ class Avatar extends StatelessWidget {
     final fallback = ColoredBox(
       color: const Color(0xFF5B7AA8),
       child: Center(
-        child: Text(letter,
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w800)),
+        child: Text(
+          letter,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ),
     );
     return ClipOval(
@@ -37,6 +44,8 @@ class Avatar extends StatelessWidget {
             : NetImage(
                 url: url!,
                 fit: BoxFit.cover,
+                width: size,
+                height: size,
                 fallback: fallback,
                 headers: headers,
               ),
@@ -65,45 +74,57 @@ class NetImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final error = fallback ??
+    final error =
+        fallback ??
         const SizedBox(
           height: 120,
           child: Center(child: Icon(Icons.broken_image_outlined)),
         );
-    final ratio = MediaQuery.devicePixelRatioOf(context);
-    final logical = width != null && width!.isFinite && width! > 0
-        ? width!
-        : MediaQuery.sizeOf(context).width;
-    final cacheWidth = (logical * ratio).clamp(48, 1440).round();
-    final lower = url.toLowerCase();
-    if (lower.contains('.avif')) {
-      return AvifImage.network(
-        url,
-        fit: fit,
-        width: width,
-        height: height,
-        headers: headers,
-        cacheWidth: cacheWidth,
-        errorBuilder: (_, __, ___) => error,
-      );
-    }
-    return Image.network(
-      url,
-      fit: fit,
-      width: width,
-      height: height,
-      headers: headers,
-      cacheWidth: cacheWidth,
-      gaplessPlayback: true,
-      errorBuilder: (_, __, ___) => AvifImage.network(
-        url,
-        fit: fit,
-        width: width,
-        height: height,
-        headers: headers,
-        cacheWidth: cacheWidth,
-        errorBuilder: (_, __, ___) => error,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final ratio = MediaQuery.devicePixelRatioOf(context);
+        final logical = width != null && width!.isFinite
+            ? width!
+            : constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final pixels = (logical * ratio).clamp(48, 2048).round();
+        final size = [
+          128,
+          640,
+          1280,
+          2048,
+        ].firstWhere((size) => size >= pixels);
+        final Uri uri;
+        try {
+          uri = FuckXterApi.displayUri(url, size);
+        } on FormatException {
+          return error;
+        } on ApiException {
+          return error;
+        }
+        return Image(
+          image: ResizeImage.resizeIfNeeded(
+            pixels,
+            null,
+            MediaImage(uri, cookie: headers?['Cookie']),
+          ),
+          fit: fit,
+          width: width,
+          height: height,
+          errorBuilder: (_, __, ___) => error,
+          frameBuilder: (_, child, frame, synchronous) =>
+              synchronous || frame != null
+              ? child
+              : SizedBox(
+                  width: width,
+                  height: height ?? 120,
+                  child: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+        );
+      },
     );
   }
 }
@@ -139,8 +160,9 @@ void showError(BuildContext context, Object error) {
 Future<void> copyText(BuildContext context, String value) async {
   await Clipboard.setData(ClipboardData(text: value));
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context)
-      .showSnackBar(const SnackBar(content: Text('已复制链接')));
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(const SnackBar(content: Text('已复制链接')));
 }
 
 String relativeTime(DateTime value) {
@@ -156,15 +178,16 @@ String compactCount(int value) =>
     value >= 10000 ? '${(value / 10000).toStringAsFixed(1)}万' : '$value';
 
 String visibilityLabel(String value) => switch (value) {
-      'mutual' => '互关可见',
-      'private' => '仅自己',
-      _ => '公开',
-    };
+  'mutual' => '互关可见',
+  'private' => '仅自己',
+  _ => '公开',
+};
 
 class CountAction extends StatelessWidget {
   const CountAction({
     super.key,
     required this.icon,
+    required this.label,
     this.value,
     this.active = false,
     this.activeColor = const Color(0xFF5B7AA8),
@@ -172,6 +195,7 @@ class CountAction extends StatelessWidget {
   });
 
   final IconData icon;
+  final String label;
   final int? value;
   final bool active;
   final Color activeColor;
@@ -179,21 +203,31 @@ class CountAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        active ? activeColor : Theme.of(context).colorScheme.onSurfaceVariant;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Row(children: [
-          Icon(icon, size: 17, color: color),
-          if (value != null) ...[
-            const SizedBox(width: 5),
-            Text(compactCount(value!),
-                style: TextStyle(fontSize: 12, color: color)),
-          ],
-        ]),
+    final color = active
+        ? activeColor
+        : Theme.of(context).colorScheme.onSurfaceVariant;
+    return Tooltip(
+      message: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          padding: const EdgeInsets.all(6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 17, color: color),
+              if (value != null) ...[
+                const SizedBox(width: 5),
+                Text(
+                  compactCount(value!),
+                  style: TextStyle(fontSize: 12, color: color),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -205,11 +239,11 @@ class EmptyHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(text, textAlign: TextAlign.center),
-        ),
-      );
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(text, textAlign: TextAlign.center),
+    ),
+  );
 }
 
 class LoadingPane extends StatelessWidget {
@@ -228,11 +262,13 @@ Future<bool> confirm(BuildContext context, String title, String body) async {
       content: Text(body),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消')),
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('取消'),
+        ),
         FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('确定')),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('确定'),
+        ),
       ],
     ),
   );
@@ -251,3 +287,18 @@ String? imageType(String name) {
 
 bool isAuthError(Object error) =>
     error is ApiException && (error.needsLogin || error.statusCode == 401);
+
+Future<Uint8List> readPickedImage(PlatformFile file) async {
+  const limit = 30 * 1024 * 1024;
+  if ((file.lengthSync() ?? 0) > limit) {
+    throw const ApiException('图片不能超过 30 MB。', 413);
+  }
+  final bytes = BytesBuilder(copy: false);
+  await for (final chunk in file.readAsByteStream()) {
+    if (bytes.length + chunk.length > limit) {
+      throw const ApiException('图片不能超过 30 MB。', 413);
+    }
+    bytes.add(chunk);
+  }
+  return bytes.takeBytes();
+}

@@ -45,21 +45,13 @@ jobs:
         shell: bash
         run: |
           flutter pub get
-          if [ "${{ matrix.target }}" = "android" ]; then
-            plugin_dir="$(find "$PUB_CACHE/hosted/pub.dev" -maxdepth 1 -type d -name 'flutter_avif_android-*' | head -n 1)"
-            test -n "$plugin_dir"
-            find "$plugin_dir/android/src/main/java" \
-              -name 'FlutterAvifPlugin.java' \
-              -delete
-            sed -i 's/compileSdkVersion 31/compileSdkVersion 36/' "$plugin_dir/android/build.gradle"
-            sed -i 's/JavaVersion.VERSION_11/JavaVersion.VERSION_17/g' "$plugin_dir/android/build.gradle"
-          fi
           if [ "${{ matrix.target }}" = "linux" ]; then
             sudo apt-get update
-            sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libdav1d-dev
+            sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsecret-1-dev
           fi
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze
+          flutter test
 
       - name: Build!
         shell: bash

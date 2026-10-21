@@ -45,3 +45,36 @@ GitHub Actions 在每次主分支提交后构建并发布：
 Linux 包为 x86_64，依赖 GTK 3、libsecret 和系统钥匙串服务（如 GNOME Keyring）。安装包会声明构建环境的最低 glibc 版本；AppImage 也需要不低于构建环境的 glibc。macOS 包使用 GitHub macOS runner 的原生架构，文件名会标明架构；当前没有 Developer ID 签名和公证。
 
 CI 检查 deb/rpm/pacman 包的版本元数据、安装 deb 并检查程序和资源、解包检查 AppImage，以及校验 DMG 和应用内的版本号。
+
+## Android 发布签名
+
+Release 必须使用同一份私钥签名，禁止使用每次 CI 随机生成的 debug 密钥。包名保持 `com.example.fuckxter_app`，升级时同时递增 `pubspec.yaml` 的版本和构建号。
+
+在仓库 Settings → Secrets and variables → Actions 配置以下 Secrets：
+
+| Secret | 内容 |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | 固定发布 keystore 的 Base64 内容 |
+| `ANDROID_STORE_PASSWORD` | keystore 密码 |
+| `ANDROID_KEY_ALIAS` | 签名密钥别名 |
+| `ANDROID_KEY_PASSWORD` | 签名密钥密码 |
+
+优先使用已安装版本的原始 keystore。若原来的临时 debug 私钥已丢失，就无法覆盖安装旧版；备份所需数据后卸载旧版，再安装固定密钥签名的版本，此后可正常覆盖升级。APK 中的证书无法还原私钥。
+
+没有旧密钥时，在安全的本地环境生成一次，并备份 keystore 和密码；不要提交私钥到仓库：
+
+```bash
+keytool -genkeypair -keystore release.jks -alias fuckxter -keyalg RSA -keysize 3072 -validity 10000
+base64 < release.jks | tr -d '\n'
+```
+
+将输出填入 `ANDROID_KEYSTORE_BASE64`，其余三项填写生成时使用的密码和别名。缺少配置时 Android 发布任务会失败，避免发布无法持续升级的 APK。PR 构建使用 debug 包，不发布。
+
+本地发布构建使用被 Git 忽略的 `android/key.properties`：
+
+```properties
+storeFile=/absolute/path/to/release.jks
+storePassword=your-store-password
+keyAlias=fuckxter
+keyPassword=your-key-password
+```

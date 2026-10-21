@@ -66,6 +66,16 @@ jobs:
         shell: bash
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
+      - name: Configure Android signing
+        if: matrix.target == 'android' && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bash scripts/android-signing.sh
+
       - name: Build!
         shell: bash
         run: |
@@ -73,7 +83,12 @@ jobs:
           mkdir -p release
           case "${{ matrix.target }}" in
             android)
-              flutter build apk
+              if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+                flutter build apk --debug
+                exit 0
+              fi
+              flutter build apk --release
+              "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)/apksigner" verify --verbose build/app/outputs/flutter-apk/app-release.apk
               cp build/app/outputs/flutter-apk/app-release.apk "release/fuckxter-${APP_VERSION}-${APP_BUILD}-android.apk"
               ;;
             linux)
@@ -91,6 +106,11 @@ jobs:
               ;;
           esac
           ls -la release
+
+      - name: Clean Android signing files
+        if: always() && matrix.target == 'android'
+        shell: bash
+        run: rm -f android/release.jks android/key.properties
 
       - name: Release
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

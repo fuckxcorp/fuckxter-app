@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -124,11 +125,17 @@ void main() {
       });
     await tester.pumpWidget(FuckXterApp(session: session));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('fx-tab-收藏')));
+    expect(find.byTooltip('搜索'), findsNothing);
+    expect(find.byKey(const ValueKey('fx-tab-收藏')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('fx-tab-我的')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('收藏'));
     await tester.pumpAndSettle();
     expect(find.byType(SavedScreen), findsOneWidget);
     expect(read, 0);
     expect(noticeLoads, 0);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('fx-tab-通知')));
     await tester.pumpAndSettle();
     expect(noticeLoads, 1);

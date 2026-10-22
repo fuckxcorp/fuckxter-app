@@ -5,13 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fx_native_glass/fx_native_glass.dart';
 
-const fxLabels = ['首页', '搜索', '通知', '私信', '收藏'];
+const fxLabels = ['首页', '搜索', '通知', '私信', '我的'];
 const fxIcons = [
   CupertinoIcons.house,
   CupertinoIcons.search,
   CupertinoIcons.bell,
   CupertinoIcons.envelope,
-  CupertinoIcons.bookmark,
+  CupertinoIcons.person_crop_circle,
 ];
 
 class FxSurface extends StatelessWidget {
@@ -59,10 +59,12 @@ class FxTabs extends StatelessWidget {
     required this.selected,
     required this.onChanged,
     this.icons,
+    this.lastIcon,
     this.height = 48,
   });
   final List<String> labels;
   final List<IconData>? icons;
+  final Widget? lastIcon;
   final int selected;
   final ValueChanged<int> onChanged;
   final double height;
@@ -119,7 +121,9 @@ class FxTabs extends StatelessWidget {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (icons != null)
+                                if (lastIcon != null && i == labels.length - 1)
+                                  lastIcon!
+                                else if (icons != null)
                                   Icon(
                                     icons![i],
                                     size: 20,
@@ -164,7 +168,9 @@ class FxNavigationBar extends StatelessWidget {
     super.key,
     required this.selected,
     required this.onChanged,
+    this.accountIcon,
   });
+  final Widget? accountIcon;
   final int selected;
   final ValueChanged<int> onChanged;
   @override
@@ -176,6 +182,7 @@ class FxNavigationBar extends StatelessWidget {
         child: FxTabs(
           labels: fxLabels,
           icons: fxIcons,
+          lastIcon: accountIcon,
           height: 60,
           selected: selected,
           onChanged: onChanged,
@@ -186,7 +193,13 @@ class FxNavigationBar extends StatelessWidget {
 }
 
 class FxSidebar extends StatelessWidget {
-  const FxSidebar({super.key, required this.selected, required this.onChanged});
+  const FxSidebar({
+    super.key,
+    required this.selected,
+    required this.onChanged,
+    this.accountIcon,
+  });
+  final Widget? accountIcon;
   final int selected;
   final ValueChanged<int> onChanged;
   @override
@@ -214,13 +227,18 @@ class FxSidebar extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
-                        Icon(
-                          fxIcons[i],
-                          size: 23,
-                          color: selected == i
-                              ? Theme.of(context).colorScheme.onSurface
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                        if (i == fxLabels.length - 1 && accountIcon != null)
+                          accountIcon!
+                        else
+                          Icon(
+                            fxIcons[i],
+                            size: 23,
+                            color: selected == i
+                                ? Theme.of(context).colorScheme.onSurface
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                          ),
                         const SizedBox(height: 4),
                         Text(
                           fxLabels[i],

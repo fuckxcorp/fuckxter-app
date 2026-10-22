@@ -90,6 +90,15 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _selectSection(int index, {bool focus = false}) async {
+    if (index == 4) {
+      final value = await showFxAccountMenu(
+        context,
+        widget.session.account,
+        widget.session.api.imageHeaders,
+      );
+      if (value != null && mounted) await _openAccount(value);
+      return;
+    }
     if (index == section && index == 0 && scroll.hasClients) {
       await _composeScroll();
       return;
@@ -337,7 +346,9 @@ class _HomeScreenState extends State<HomeScreen>
       case 'messages':
         await _selectSection(3);
       case 'saved':
-        await _selectSection(4);
+        await _guarded(() async {
+          openSaved(context, widget.session);
+        });
       case 'history':
         openHistory(context, widget.session);
       case 'settings':
@@ -362,6 +373,18 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     openPost(context, widget.session, post, onCovered: restore);
+  }
+
+  Widget _accountIcon() {
+    final account = widget.session.account;
+    return account == null
+        ? const Icon(CupertinoIcons.person_crop_circle, size: 24)
+        : Avatar(
+            name: account.profile.name,
+            size: 24,
+            headers: widget.session.api.imageHeaders,
+            url: account.avatarUrl,
+          );
   }
 
   Widget _page(int index, bool compact) {
@@ -414,11 +437,7 @@ class _HomeScreenState extends State<HomeScreen>
         embedded: true,
         active: section == 3,
       ),
-      _ => SavedScreen(
-        session: widget.session,
-        embedded: true,
-        active: section == 4,
-      ),
+      _ => const SizedBox.shrink(),
     };
   }
 
@@ -548,7 +567,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final account = widget.session.account;
     if (!widget.session.ready) {
       return const Scaffold(body: SafeArea(child: LoadingPane()));
     }
@@ -566,6 +584,7 @@ class _HomeScreenState extends State<HomeScreen>
       bottomNavigationBar: compact && !keyboard
           ? FxNavigationBar(
               selected: section,
+              accountIcon: _accountIcon(),
               onChanged: (index) => _selectSection(index, focus: index == 1),
             )
           : null,
@@ -579,8 +598,6 @@ class _HomeScreenState extends State<HomeScreen>
               tab: tab,
               section: section,
               collapsed: compact && collapsed,
-              account: account,
-              imageHeaders: widget.session.api.imageHeaders,
               onSearch: _showSearch,
               onSubmit: _search,
               onCloseSearch: () => _selectSection(0),
@@ -590,7 +607,6 @@ class _HomeScreenState extends State<HomeScreen>
               }),
               onHome: () => _selectSection(0),
               onTab: _switchTab,
-              onAccount: _openAccount,
             ),
             Expanded(
               child: Row(
@@ -601,6 +617,7 @@ class _HomeScreenState extends State<HomeScreen>
                       offstage: compact,
                       child: FxSidebar(
                         selected: section,
+                        accountIcon: _accountIcon(),
                         onChanged: (index) =>
                             _selectSection(index, focus: index == 1),
                       ),
@@ -618,7 +635,7 @@ class _HomeScreenState extends State<HomeScreen>
                       child: PageView.builder(
                         key: const ValueKey('home-pages'),
                         controller: pages,
-                        itemCount: fxLabels.length,
+                        itemCount: fxLabels.length - 1,
                         onPageChanged: (index) {
                           if (destination != null) return;
                           setState(() {
@@ -672,55 +689,25 @@ class _TopBar extends StatelessWidget {
     required this.tab,
     required this.section,
     required this.collapsed,
-    required this.account,
-    required this.imageHeaders,
     required this.onSearch,
     required this.onSubmit,
     required this.onCloseSearch,
     required this.onExpand,
     required this.onHome,
     required this.onTab,
-    required this.onAccount,
   });
   final TextEditingController search;
   final FocusNode searchFocus;
   final String tab;
   final int section;
   final bool collapsed;
-  final Account? account;
-  final Map<String, String> imageHeaders;
   final VoidCallback onSearch, onSubmit, onCloseSearch, onExpand, onHome;
-  final ValueChanged<String> onTab, onAccount;
+  final ValueChanged<String> onTab;
 
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 720;
     final searching = section == 1;
-    final menu = Semantics(
-      button: true,
-      label: '账号',
-      child: InkWell(
-        onTap: () async {
-          final value = await showFxAccountMenu(context, account, imageHeaders);
-          if (value != null) onAccount(value);
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: account == null
-              ? const SizedBox.square(
-                  dimension: 40,
-                  child: Icon(CupertinoIcons.person),
-                )
-              : FxAvatar(
-                  name: account!.profile.name,
-                  size: 44,
-                  mirror: true,
-                  headers: imageHeaders,
-                  url: account!.avatarUrl,
-                ),
-        ),
-      ),
-    );
     final field = TextField(
       key: const ValueKey('inline-search'),
       controller: search,
@@ -768,21 +755,14 @@ class _TopBar extends StatelessWidget {
                     duration: MediaQuery.disableAnimationsOf(context)
                         ? Duration.zero
                         : const Duration(milliseconds: 200),
-                    child: searching || !compact
+                    child: searching
                         ? FxSurface(radius: 14, child: field)
                         : const SizedBox.shrink(),
                   ),
                 ),
               ),
-              if (compact && !searching)
-                IconButton(
-                  tooltip: '搜索',
-                  onPressed: onSearch,
-                  icon: const Icon(CupertinoIcons.search),
-                ),
               if (!compact && section == 0)
                 SizedBox(width: 240, child: feedTabs),
-              menu,
             ],
           ),
         ),

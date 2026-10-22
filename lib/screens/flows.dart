@@ -764,7 +764,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               child: Text('关注 ${user.following}'),
                             ),
-                            Text('帖子 ${user.posts}'),
                             const Spacer(),
                             if (widget.session.account?.profile.handle !=
                                 user.handle)

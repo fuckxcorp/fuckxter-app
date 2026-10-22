@@ -1,6 +1,8 @@
 import 'dart:ui' as ui;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+
 import '../models/models.dart';
 import 'bits.dart';
 import 'fx_controls.dart';
@@ -24,10 +26,8 @@ Future<String?> showFxAccountMenu(
           ('login', '登录 / 注册', CupertinoIcons.person)
         else
           ('profile', account.profile.name, CupertinoIcons.person),
-        ('notices', '通知', CupertinoIcons.bell),
         ('saved', '收藏', CupertinoIcons.bookmark),
         ('history', '浏览记录', CupertinoIcons.clock),
-        ('messages', '私信', CupertinoIcons.chat_bubble_text),
         ('settings', '设置', CupertinoIcons.gear),
         ('theme', '切换主题', CupertinoIcons.circle_lefthalf_fill),
       ];
@@ -44,7 +44,7 @@ Future<String?> showFxAccountMenu(
           ),
           SafeArea(
             child: Align(
-              alignment: Alignment.topRight,
+              alignment: Alignment.bottomRight,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: ConstrainedBox(

@@ -15,6 +15,7 @@ class AppSession extends ChangeNotifier {
   ThemeMode themeMode = ThemeMode.system;
   List<HistoryItem> history = const [];
   bool ready = false;
+  String feedTab = 'foryou';
   SharedPreferences? _prefs;
   final _storage = const FlutterSecureStorage(
     mOptions: MacOsOptions(usesDataProtectionKeychain: false),
@@ -25,6 +26,10 @@ class AppSession extends ChangeNotifier {
       _prefs = await SharedPreferences.getInstance();
     } catch (_) {
       _prefs = null;
+    }
+    final savedTab = _prefs?.getString('fk_feed_tab');
+    if (['foryou', 'latest', 'following'].contains(savedTab)) {
+      feedTab = savedTab!;
     }
     final theme = _prefs?.getString('fk_theme');
     themeMode = switch (theme) {
@@ -109,6 +114,12 @@ class AppSession extends ChangeNotifier {
 
   void replaceAccount(Account next) {
     _setAccount(next);
+  }
+
+  void rememberFeedTab(String value) {
+    if (!['foryou', 'latest', 'following'].contains(value)) return;
+    feedTab = value;
+    _prefs?.setString('fk_feed_tab', value);
   }
 
   void toggleTheme() {

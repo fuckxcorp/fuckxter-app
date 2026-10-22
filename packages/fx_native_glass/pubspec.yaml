@@ -1,0 +1,17 @@
+name: fx_native_glass
+description: Native Apple glass surfaces for the FuckXter client.
+version: 0.0.1
+publish_to: none
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: '>=3.32.0'
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  plugin:
+    platforms:
+      ios:
+        pluginClass: FxNativeGlassPlugin
+      macos:
+        pluginClass: FxNativeGlassPlugin

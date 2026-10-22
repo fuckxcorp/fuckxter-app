@@ -7,6 +7,8 @@ import '../services/fuckxter_api.dart';
 import '../session.dart';
 import '../widgets/bits.dart';
 import '../widgets/post_card.dart';
+import '../widgets/fx_motion.dart';
+import '../widgets/fx_controls.dart';
 
 Future<bool> openLogin(BuildContext context, AppSession session) async {
   final ok = await Navigator.of(context).push<bool>(
@@ -15,13 +17,28 @@ Future<bool> openLogin(BuildContext context, AppSession session) async {
   return ok == true || session.account != null;
 }
 
-void openPost(BuildContext context, AppSession session, Post post) {
+void openPost(
+  BuildContext context,
+  AppSession session,
+  Post post, {
+  VoidCallback? onCovered,
+}) {
   session.rememberPost(post);
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => PostScreen(session: session, post: post),
-    ),
+  final route = MaterialPageRoute<void>(
+    builder: (_) => PostScreen(session: session, post: post),
   );
+  Navigator.of(context).push(route).whenComplete(() => onCovered?.call());
+  if (onCovered != null) {
+    void covered(AnimationStatus status) {
+      if (status == AnimationStatus.completed ||
+          status == AnimationStatus.dismissed) {
+        route.animation?.removeStatusListener(covered);
+        onCovered();
+      }
+    }
+
+    route.animation?.addStatusListener(covered);
+  }
 }
 
 void openProfile(BuildContext context, AppSession session, String handle) {
@@ -47,8 +64,12 @@ void openNotices(BuildContext context, AppSession session) {
   ).push(MaterialPageRoute(builder: (_) => NoticesScreen(session: session)));
 }
 
-void openMessages(BuildContext context, AppSession session, {String? handle}) {
-  Navigator.of(context).push(
+Future<void> openMessages(
+  BuildContext context,
+  AppSession session, {
+  String? handle,
+}) async {
+  await Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => handle == null
           ? MessagesScreen(session: session)
@@ -192,8 +213,14 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key, required this.session, required this.query});
+  const SearchScreen({
+    super.key,
+    required this.session,
+    required this.query,
+    this.embedded = false,
+  });
   final AppSession session;
+  final bool embedded;
   final String query;
 
   @override
@@ -212,6 +239,15 @@ class _SearchScreenState extends State<SearchScreen> {
   void initState() {
     super.initState();
     _run();
+  }
+
+  @override
+  void didUpdateWidget(SearchScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.query != oldWidget.query) {
+      controller.text = widget.query;
+      _run();
+    }
   }
 
   @override
@@ -253,17 +289,19 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: controller,
-          textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(
-            hintText: '搜索 FuckXter',
-            border: InputBorder.none,
-          ),
-          onSubmitted: (_) => _run(),
-        ),
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              title: TextField(
+                controller: controller,
+                textInputAction: TextInputAction.search,
+                decoration: const InputDecoration(
+                  hintText: '搜索 FuckXter',
+                  border: InputBorder.none,
+                ),
+                onSubmitted: (_) => _run(),
+              ),
+            ),
       body: loading
           ? const LoadingPane()
           : error != null
@@ -274,7 +312,9 @@ class _SearchScreenState extends State<SearchScreen> {
                   : users.length + posts.length,
               itemBuilder: (_, index) {
                 if (users.isEmpty && posts.isEmpty) {
-                  return const EmptyHint('没有匹配的用户或帖子');
+                  return EmptyHint(
+                    controller.text.trim().isEmpty ? '搜索用户和帖子' : '没有匹配的用户或帖子',
+                  );
                 }
                 if (index < users.length) {
                   final user = users[index];
@@ -397,12 +437,15 @@ class _PostScreenState extends State<PostScreen> {
                         : comments.length),
                 itemBuilder: (_, index) {
                   if (index == 0) {
-                    return PostCard(
-                      post: post,
-                      session: widget.session,
-                      onChanged: (next) => setState(() => post = next),
-                      onOpen: () {},
-                      onDeleted: () => Navigator.pop(context),
+                    return FxReveal(
+                      child: PostCard(
+                        post: post,
+                        detail: true,
+                        session: widget.session,
+                        onChanged: (next) => setState(() => post = next),
+                        onOpen: () {},
+                        onDeleted: () => Navigator.pop(context),
+                      ),
                     );
                   }
                   if (loading) {
@@ -414,41 +457,47 @@ class _PostScreenState extends State<PostScreen> {
                   if (error != null) return EmptyHint('$error');
                   if (comments.isEmpty) return const EmptyHint('还没有评论');
                   final comment = comments[index - 1];
-                  return _CommentTile(
+                  return FxReveal(
                     key: ValueKey(comment.id),
-                    comment: comment,
-                    session: widget.session,
-                    postId: post.id,
-                    onReply: () => setState(() {
-                      parentId = comment.id;
-                      reply.text = '@${comment.author.handle} ';
-                    }),
-                    onChanged: _load,
+                    delay: Duration(milliseconds: (index * 36).clamp(0, 180)),
+                    child: _CommentTile(
+                      comment: comment,
+                      session: widget.session,
+                      postId: post.id,
+                      onReply: () => setState(() {
+                        parentId = comment.id;
+                        reply.text = '@${comment.author.handle} ';
+                      }),
+                      onChanged: _load,
+                    ),
                   );
                 },
               ),
             ),
           ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: reply,
-                      enabled: !sending,
-                      maxLength: 1000,
-                      decoration: InputDecoration(
-                        hintText: parentId == null ? '写一条评论' : '回复评论',
+          FxSurface(
+            radius: 22,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: reply,
+                        enabled: !sending,
+                        maxLength: 1000,
+                        decoration: InputDecoration(
+                          hintText: parentId == null ? '写一条评论' : '回复评论',
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: sending ? null : _send,
-                    icon: const Icon(Icons.send),
-                  ),
-                ],
+                    IconButton(
+                      onPressed: sending ? null : _send,
+                      icon: const Icon(Icons.send),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -460,7 +509,6 @@ class _PostScreenState extends State<PostScreen> {
 
 class _CommentTile extends StatelessWidget {
   const _CommentTile({
-    super.key,
     required this.comment,
     required this.session,
     required this.postId,
@@ -850,8 +898,15 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
 }
 
 class NoticesScreen extends StatefulWidget {
-  const NoticesScreen({super.key, required this.session});
+  const NoticesScreen({
+    super.key,
+    required this.session,
+    this.active = true,
+    this.embedded = false,
+  });
   final AppSession session;
+  final bool embedded;
+  final bool active;
 
   @override
   State<NoticesScreen> createState() => _NoticesScreenState();
@@ -865,17 +920,28 @@ class _NoticesScreenState extends State<NoticesScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.active) _load();
   }
 
+  @override
+  void didUpdateWidget(NoticesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) _load();
+  }
+
+  bool fetching = false;
   Future<void> _load() async {
+    if (fetching) return;
+    fetching = true;
+    if (mounted) setState(() => error = null);
     try {
       final items = await widget.session.api.notices();
-      await widget.session.api.markNoticesRead();
+      if (mounted && widget.active) await widget.session.api.markNoticesRead();
       if (mounted) setState(() => notices = items);
     } catch (error) {
       if (mounted) setState(() => this.error = error);
     } finally {
+      fetching = false;
       if (mounted) setState(() => loading = false);
     }
   }
@@ -894,7 +960,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('通知')),
+      appBar: widget.embedded ? null : AppBar(title: const Text('通知')),
       body: loading
           ? const LoadingPane()
           : error != null
@@ -902,6 +968,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
           : notices.isEmpty
           ? const EmptyHint('没有通知')
           : ListView.builder(
+              padding: EdgeInsets.only(bottom: widget.embedded ? 100 : 24),
               itemCount: notices.length,
               itemBuilder: (_, index) {
                 final notice = notices[index];
@@ -937,8 +1004,15 @@ class _NoticesScreenState extends State<NoticesScreen> {
 }
 
 class MessagesScreen extends StatefulWidget {
-  const MessagesScreen({super.key, required this.session});
+  const MessagesScreen({
+    super.key,
+    required this.session,
+    this.active = true,
+    this.embedded = false,
+  });
   final AppSession session;
+  final bool embedded;
+  final bool active;
 
   @override
   State<MessagesScreen> createState() => _MessagesScreenState();
@@ -952,16 +1026,27 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.active) _load();
   }
 
+  @override
+  void didUpdateWidget(MessagesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) _load();
+  }
+
+  bool fetching = false;
   Future<void> _load() async {
+    if (fetching) return;
+    fetching = true;
+    if (mounted) setState(() => error = null);
     try {
       final page = await widget.session.api.conversations();
       if (mounted) setState(() => threads = page.threads);
     } catch (error) {
       if (mounted) setState(() => this.error = error);
     } finally {
+      fetching = false;
       if (mounted) setState(() => loading = false);
     }
   }
@@ -969,7 +1054,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('私信')),
+      appBar: widget.embedded ? null : AppBar(title: const Text('私信')),
       body: loading
           ? const LoadingPane()
           : error != null
@@ -979,25 +1064,37 @@ class _MessagesScreenState extends State<MessagesScreen> {
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView.builder(
+                padding: EdgeInsets.only(bottom: widget.embedded ? 100 : 24),
                 itemCount: threads.length,
                 itemBuilder: (_, index) {
                   final thread = threads[index];
                   return ListTile(
-                    leading: Avatar(
+                    leading: FxAvatar(
                       name: thread.other.name,
                       size: 40,
                       url: thread.other.avatarUrl,
                     ),
-                    title: Text(thread.other.name),
-                    subtitle: Text(thread.lastBody),
+                    title: Text(
+                      thread.other.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      thread.lastBody.replaceAll(RegExp(r'\s+'), ' ').trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     trailing: thread.unread == 0
                         ? null
                         : Text('${thread.unread}'),
-                    onTap: () => openMessages(
-                      context,
-                      widget.session,
-                      handle: thread.other.handle,
-                    ),
+                    onTap: () async {
+                      await openMessages(
+                        context,
+                        widget.session,
+                        handle: thread.other.handle,
+                      );
+                      if (mounted) _load();
+                    },
                   );
                 },
               ),
@@ -1132,26 +1229,29 @@ class _ThreadScreenState extends State<ThreadScreen> {
           ),
           if (hint != null && hint!.isNotEmpty)
             Padding(padding: const EdgeInsets.all(8), child: Text(hint!)),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: input,
-                      enabled: canSend && !sending && !loading,
-                      maxLength: 1000,
-                      decoration: InputDecoration(
-                        hintText: canSend ? '写一条私信' : '现在不能发私信',
+          FxSurface(
+            radius: 22,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: input,
+                        enabled: canSend && !sending && !loading,
+                        maxLength: 1000,
+                        decoration: InputDecoration(
+                          hintText: canSend ? '写一条私信' : '现在不能发私信',
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: canSend && !sending && !loading ? _send : null,
-                    icon: const Icon(Icons.send),
-                  ),
-                ],
+                    IconButton(
+                      onPressed: canSend && !sending && !loading ? _send : null,
+                      icon: const Icon(Icons.send),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1162,8 +1262,15 @@ class _ThreadScreenState extends State<ThreadScreen> {
 }
 
 class SavedScreen extends StatefulWidget {
-  const SavedScreen({super.key, required this.session});
+  const SavedScreen({
+    super.key,
+    required this.session,
+    this.active = true,
+    this.embedded = false,
+  });
   final AppSession session;
+  final bool embedded;
+  final bool active;
 
   @override
   State<SavedScreen> createState() => _SavedScreenState();
@@ -1177,16 +1284,27 @@ class _SavedScreenState extends State<SavedScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.active) _load();
   }
 
+  @override
+  void didUpdateWidget(SavedScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) _load();
+  }
+
+  bool fetching = false;
   Future<void> _load() async {
+    if (fetching) return;
+    fetching = true;
+    if (mounted) setState(() => error = null);
     try {
       final items = await widget.session.api.savedPosts();
       if (mounted) setState(() => posts = items);
     } catch (error) {
       if (mounted) setState(() => this.error = error);
     } finally {
+      fetching = false;
       if (mounted) setState(() => loading = false);
     }
   }
@@ -1194,7 +1312,7 @@ class _SavedScreenState extends State<SavedScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('收藏')),
+      appBar: widget.embedded ? null : AppBar(title: const Text('收藏')),
       body: loading
           ? const LoadingPane()
           : error != null
@@ -1202,6 +1320,7 @@ class _SavedScreenState extends State<SavedScreen> {
           : posts.isEmpty
           ? const EmptyHint('还没有收藏')
           : ListView.builder(
+              padding: EdgeInsets.only(bottom: widget.embedded ? 100 : 24),
               itemCount: posts.length,
               itemBuilder: (_, index) => PostCard(
                 key: ValueKey(posts[index].id),

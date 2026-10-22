@@ -13,11 +13,21 @@ FuckXter 的 Flutter 客户端，和网页端使用同一个API。
 
 ### 初始化
 
-使用 stable Flutter。CI 执行格式检查、静态分析、测试及 Android、Linux、Windows、macOS 构建。Linux 需要 `libsecret-1-dev`（构建）及运行中的系统钥匙串服务（登录）。
+使用 stable Flutter。CI 执行格式检查、静态分析、测试及 Android、Linux、Windows、macOS 和 iOS 模拟器构建。Linux 需要 `libsecret-1-dev`（构建）及运行中的系统钥匙串服务（登录）。
 
 客户端图片统一通过 API 的 `format=webp&width=128|640|1280|2048` 接口加载；请先部署包含此接口的网站 Worker，再发布客户端。客户端不再使用 AVIF 插件或旧图片解码回退，缩略图与全屏查看均由服务端生成 WebP。转换失败会显示加载失败，不回退到原始 AVIF 解码。
 
 登录凭据保存在系统安全存储中。私有图片缓存按会话隔离，图片请求只接受 API 同源地址且禁止重定向。
+
+### 客户端界面
+
+底栏在同一页面内滑动切换，搜索在页头展开，返回首页保留信息流和滚动位置。窄屏用底栏，宽屏用侧栏；折叠、旋转和调整窗口时保留草稿与当前页面。图片按原比例展示，超长图限制信息流占高；全屏预览随手势连续调整高度。
+
+Apple 端在 iOS/macOS 26 及以上使用本地插件调用 SwiftUI `glassEffect`，应用于导航、搜索、账号菜单和回复/预览控制栏。帖子正文不叠加原生玻璃视图。旧系统和其他平台使用 Fx 单色样式；减少动态效果开启时跳过对焦、逐项浮入和滑动动效。
+
+iOS/macOS 共用 `apple/FxAppIcon.icon`，图形沿用网页 favicon 的 Fx 轮廓，F 和 X 分层，包含默认、深色和着色外观。需 Xcode 26 及以上编译；Xcode 同时生成旧系统所需的图标。可以用 Icon Composer 打开继续调整材质。
+
+iOS CI 产物是未签名的模拟器包；安装到真机、TestFlight 或 App Store 仍需 Apple 开发者签名与发布配置。
 
 ### 安装包
 

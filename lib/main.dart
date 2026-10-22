@@ -75,6 +75,11 @@ ThemeData _theme(Brightness brightness) {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: dark ? const Color(0xFFF2F4F6) : const Color(0xFF101215),
+      foregroundColor: dark ? Colors.black : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
     scaffoldBackgroundColor: dark ? Colors.black : Colors.white,
     dividerColor: dark ? const Color(0xFF262626) : const Color(0xFFE3E6EA),
     textTheme: ThemeData(brightness: brightness).textTheme.apply(

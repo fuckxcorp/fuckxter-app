@@ -1,0 +1,110 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "srgb:0.160,0.122,0.108,1",
+          "srgb:0.085,0.064,0.057,1"
+        ]
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "srgb:0.085,0.070,0.064,1",
+          "srgb:0.025,0.022,0.020,1"
+        ]
+      }
+    },
+    {
+      "appearance": "tinted",
+      "value": "automatic"
+    }
+  ],
+  "groups": [
+    {
+      "name": "F",
+      "lighting": "individual",
+      "blur-material": 0.12,
+      "specular": true,
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.35
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.35
+      },
+      "layers": [
+        {
+          "image-name": "01-F.svg",
+          "name": "F",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "value": {
+                "automatic-gradient": "extended-gray:1.00000,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "automatic-gradient": "extended-gray:0.95000,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:1.00000,1.00000"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "X",
+      "lighting": "individual",
+      "blur-material": 0.12,
+      "specular": true,
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.35
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.35
+      },
+      "layers": [
+        {
+          "image-name": "02-X.svg",
+          "name": "X",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "value": {
+                "automatic-gradient": "extended-gray:1.00000,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "automatic-gradient": "extended-gray:0.95000,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:1.00000,1.00000"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

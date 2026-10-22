@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:fuckxter_app/models/models.dart';
 import 'package:fuckxter_app/widgets/post_card.dart';
+import 'package:fuckxter_app/widgets/fx_controls.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -222,10 +223,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('mobile navigation opens search and protects account actions', (
+  testWidgets('mobile navigation slides in place and expands inline search', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(320, 800);
+    tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -237,27 +238,69 @@ void main() {
       FuckXterApp(session: AppSession(api: api)..ready = true),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(NavigationBar), findsOneWidget);
-    await tester.tap(
-      find.descendant(
-        of: find.byType(NavigationBar),
-        matching: find.text('搜索'),
-      ),
-    );
+    final homeContext = tester.element(find.byType(FxNavigationBar));
+    expect(Navigator.of(homeContext).canPop(), isFalse);
+    await tester.tap(find.byKey(const ValueKey('fx-tab-搜索')));
     await tester.pumpAndSettle();
-    expect(find.byType(SearchScreen), findsOneWidget);
-    await tester.pageBack();
+    expect(find.byKey(const ValueKey('inline-search')), findsOneWidget);
+    expect(Navigator.of(homeContext).canPop(), isFalse);
+    await tester.tap(find.byTooltip('关闭搜索'));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.descendant(
-        of: find.byType(NavigationBar),
-        matching: find.text('通知'),
-      ),
-    );
+    await tester.tap(find.byKey(const ValueKey('fx-tab-通知')));
+    await tester.pumpAndSettle();
+    expect(find.text('登录后查看通知'), findsOneWidget);
+    expect(Navigator.of(homeContext).canPop(), isFalse);
+    await tester.tap(find.text('登录 / 注册'));
     await tester.pumpAndSettle();
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'top feed tabs collapse on downward scrolling and return upward',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final api = FuckXterApi(
+        client: MockClient(
+          (request) async => http.Response(
+            jsonEncode({'posts': List.generate(20, (i) => _post('scroll $i'))}),
+            200,
+          ),
+        ),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        FuckXterApp(session: AppSession(api: api)..ready = true),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('collapsed-feed-tabs')), findsOneWidget);
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 150));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('collapsed-feed-tabs')), findsNothing);
+      expect(find.text('推荐'), findsOneWidget);
+      final position = tester
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
+          .controller!
+          .offset;
+      await tester.tap(find.byKey(const ValueKey('fx-tab-收藏')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('fx-tab-首页')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CustomScrollView>(find.byType(CustomScrollView))
+            .controller!
+            .offset,
+        closeTo(position, 1),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'compose shortcut focuses the editor and shows the character count',
@@ -290,7 +333,7 @@ void main() {
   );
 
   testWidgets(
-    'media grid fits narrow cards and opens the selected gallery image',
+    'horizontal media strip fits narrow cards and opens a photo directly',
     (tester) async {
       tester.view.physicalSize = const Size(320, 800);
       tester.view.devicePixelRatio = 1;
@@ -316,14 +359,14 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('+2'), findsOneWidget);
+      expect(find.text('+2'), findsNothing);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('+2'));
+      await tester.tap(find.bySemanticsLabel('查看图片 1/6 Photo 0'));
       await tester.pumpAndSettle();
-      expect(find.text('4 / 6'), findsOneWidget);
+      expect(find.text('1 / 6'), findsOneWidget);
       await tester.tap(find.byTooltip('下一张'));
       await tester.pumpAndSettle();
-      expect(find.text('5 / 6'), findsOneWidget);
+      expect(find.text('2 / 6'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

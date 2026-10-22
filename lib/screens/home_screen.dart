@@ -7,6 +7,9 @@ import '../services/fuckxter_api.dart';
 import '../session.dart';
 import '../widgets/bits.dart';
 import '../widgets/post_card.dart';
+import '../widgets/fx_controls.dart';
+import '../widgets/fx_motion.dart';
+import '../widgets/fx_account_menu.dart';
 import 'flows.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -17,8 +20,23 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   final scroll = ScrollController();
+  final pages = PageController();
+  late final exit = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 180),
+  );
+  bool opening = false;
+  final searchFocus = FocusNode();
+  int section = 0;
+  int? destination;
+  int navigation = 0;
+  String query = '';
+  bool collapsed = false;
+  double lastOffset = 0;
+  double scrollTravel = 0;
   final composer = TextEditingController();
   final composerFocus = FocusNode();
   final feeds =
@@ -29,7 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final search = TextEditingController();
   final posts = <Post>[];
   final media = <PostMedia>[];
-  String tab = 'foryou';
+  late String tab = widget.session.feedTab;
   String visibility = 'public';
   String? cursor;
   Object? error;
@@ -38,30 +56,96 @@ class _HomeScreenState extends State<HomeScreen> {
   bool uploading = false;
   int _generation = 0;
   String? _handle;
+  bool _ready = false;
 
   @override
   void initState() {
     super.initState();
     _handle = widget.session.account?.profile.handle;
+    _ready = widget.session.ready;
     widget.session.addListener(_onSession);
-    scroll.addListener(() {
-      if (scroll.position.extentAfter < 500 &&
-          cursor != null &&
-          !loading &&
-          error == null) {
-        _load();
-      }
+    scroll.addListener(_onScroll);
+    if (_ready) _load(reset: true);
+  }
+
+  void _onScroll() {
+    if (section != 0 || !scroll.hasClients) return;
+    final offset = scroll.offset;
+    final delta = offset - lastOffset;
+    lastOffset = offset;
+    if (delta.abs() > .5) {
+      if (delta.sign != scrollTravel.sign) scrollTravel = 0;
+      scrollTravel += delta;
+      final next =
+          offset > 80 &&
+          (scrollTravel > 28 || (collapsed && scrollTravel > -16));
+      if (next != collapsed) setState(() => collapsed = next);
+    }
+    if (scroll.position.extentAfter < 500 &&
+        cursor != null &&
+        !loading &&
+        error == null) {
+      _load();
+    }
+  }
+
+  Future<void> _selectSection(int index, {bool focus = false}) async {
+    if (index == section && index == 0 && scroll.hasClients) {
+      await _composeScroll();
+      return;
+    }
+    final request = ++navigation;
+    destination = index;
+    setState(() {
+      section = index;
+      collapsed = false;
     });
-    _load(reset: true);
+    if (index != 1) FocusManager.instance.primaryFocus?.unfocus();
+    if (pages.hasClients) {
+      if (MediaQuery.disableAnimationsOf(context)) {
+        pages.jumpToPage(index);
+      } else {
+        await pages.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    }
+    if (!mounted || request != navigation) return;
+    destination = null;
+    if (index == 1 && focus) searchFocus.requestFocus();
+  }
+
+  void _showSearch() => _selectSection(1, focus: true);
+
+  void _search() {
+    setState(() => query = search.text.trim());
+    _selectSection(1);
+    searchFocus.unfocus();
+  }
+
+  Future<void> _composeScroll() async {
+    setState(() => collapsed = false);
+    if (scroll.hasClients) {
+      await scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   void _onSession() {
     if (!mounted) return;
     final handle = widget.session.account?.profile.handle;
     final changed = handle != _handle;
+    final becameReady = !_ready && widget.session.ready;
+    _ready = widget.session.ready;
+    if (becameReady) tab = widget.session.feedTab;
     _handle = handle;
     setState(() {});
-    if (changed) {
+    if (changed || becameReady) {
       feeds.clear();
       posts.clear();
       if (scroll.hasClients) scroll.jumpTo(0);
@@ -76,6 +160,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     widget.session.removeListener(_onSession);
     scroll.dispose();
+    pages.dispose();
+    exit.dispose();
+    searchFocus.dispose();
     composer.dispose();
     composerFocus.dispose();
     search.dispose();
@@ -117,6 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _switchTab(String value) {
     if (tab == value) return;
+    widget.session.rememberFeedTab(value);
     if (!loading || posts.isNotEmpty) {
       feeds[tab] = (
         posts: List.of(posts),
@@ -245,11 +333,11 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'theme':
         widget.session.toggleTheme();
       case 'notices':
-        await _guarded(() async => openNotices(context, widget.session));
+        await _selectSection(2);
       case 'messages':
-        await _guarded(() async => openMessages(context, widget.session));
+        await _selectSection(3);
       case 'saved':
-        await _guarded(() async => openSaved(context, widget.session));
+        await _selectSection(4);
       case 'history':
         openHistory(context, widget.session);
       case 'settings':
@@ -260,6 +348,204 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _openFeedPost(Post post) async {
+    if (opening) return;
+    opening = true;
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (!MediaQuery.disableAnimationsOf(context)) await exit.forward();
+    if (!mounted) return;
+    void restore() {
+      if (mounted) {
+        exit.value = 0;
+        opening = false;
+      }
+    }
+
+    openPost(context, widget.session, post, onCovered: restore);
+  }
+
+  Widget _page(int index, bool compact) {
+    if (index == 0) {
+      return AnimatedBuilder(
+        animation: exit,
+        child: _feed(compact),
+        builder: (context, child) => IgnorePointer(
+          ignoring: opening,
+          child: Opacity(
+            opacity: 1 - exit.value,
+            child: Transform.translate(
+              offset: Offset(8 * exit.value, 6 * exit.value),
+              child: child,
+            ),
+          ),
+        ),
+      );
+    }
+    if (index == 1) {
+      return SearchScreen(
+        session: widget.session,
+        query: query,
+        embedded: true,
+      );
+    }
+    if (widget.session.account == null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('登录后查看${fxLabels[index]}'),
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: () => openLogin(context, widget.session),
+              child: const Text('登录 / 注册'),
+            ),
+          ],
+        ),
+      );
+    }
+    return switch (index) {
+      2 => NoticesScreen(
+        session: widget.session,
+        embedded: true,
+        active: section == 2,
+      ),
+      3 => MessagesScreen(
+        session: widget.session,
+        embedded: true,
+        active: section == 3,
+      ),
+      _ => SavedScreen(
+        session: widget.session,
+        embedded: true,
+        active: section == 4,
+      ),
+    };
+  }
+
+  Widget _feed(bool compact) => RefreshIndicator(
+    onRefresh: () => _load(reset: true),
+    child: CustomScrollView(
+      controller: scroll,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(
+          child: _Composer(
+            controller: composer,
+            focusNode: composerFocus,
+            posting: posting,
+            visibility: visibility,
+            media: media,
+            api: widget.session.api,
+            uploading: uploading,
+            onRemove: (id) =>
+                setState(() => media.removeWhere((item) => item.id == id)),
+            avatarUrl: widget.session.account?.avatarUrl,
+            imageHeaders: widget.session.api.imageHeaders,
+            name: widget.session.account?.profile.name ?? '?',
+            onVisibility: (value) => setState(() => visibility = value),
+            onAttach: _attach,
+            onSubmit: _submit,
+          ),
+        ),
+        if (posts.isEmpty && loading)
+          SliverList.list(
+            children: const [
+              _PostPlaceholder(),
+              _PostPlaceholder(),
+              _PostPlaceholder(),
+            ],
+          )
+        else if (posts.isEmpty && error != null)
+          SliverFillRemaining(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('$error'),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: () => _load(reset: true),
+                    child: const Text('重新加载'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (posts.isEmpty)
+          const SliverFillRemaining(child: EmptyHint('还没有帖子，发出第一条动态吧'))
+        else
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              compact ? 8 : 16,
+              12,
+              compact ? 8 : 16,
+              0,
+            ),
+            sliver: SliverList.builder(
+              itemCount: posts.length,
+              itemBuilder: (_, index) {
+                final post = posts[index];
+                return RepaintBoundary(
+                  key: ValueKey(post.id),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 680),
+                      child: FxReveal(
+                        delay: Duration(
+                          milliseconds: (index * 36).clamp(0, 180),
+                        ),
+                        child: PostCard(
+                          post: post,
+                          onOpen: () => _openFeedPost(post),
+                          session: widget.session,
+                          onChanged: (next) => setState(() {
+                            final i = posts.indexWhere(
+                              (item) => item.id == next.id,
+                            );
+                            if (i >= 0) posts[i] = next;
+                            for (final feed in feeds.values) {
+                              final i = feed.posts.indexWhere(
+                                (item) => item.id == next.id,
+                              );
+                              if (i >= 0) feed.posts[i] = next;
+                            }
+                          }),
+                          onDeleted: () => setState(() {
+                            posts.removeWhere((item) => item.id == post.id);
+                            for (final feed in feeds.values) {
+                              feed.posts.removeWhere(
+                                (item) => item.id == post.id,
+                              );
+                            }
+                          }),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 96,
+            child: Center(
+              child: loading && posts.isNotEmpty
+                  ? const CircularProgressIndicator(strokeWidth: 2)
+                  : error != null
+                  ? TextButton(
+                      onPressed: () => _load(reset: cursor == null),
+                      child: const Text('加载失败，点击重试'),
+                    )
+                  : Text(cursor == null && posts.isNotEmpty ? '你已看完全部内容' : ''),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final account = widget.session.account;
@@ -269,7 +555,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final compact = MediaQuery.sizeOf(context).width < 720;
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Scaffold(
-      floatingActionButton: compact && !keyboard
+      extendBody: true,
+      floatingActionButton: compact && !keyboard && section == 0
           ? FloatingActionButton.small(
               tooltip: '撰写帖子',
               onPressed: _compose,
@@ -277,198 +564,80 @@ class _HomeScreenState extends State<HomeScreen> {
             )
           : null,
       bottomNavigationBar: compact && !keyboard
-          ? NavigationBar(
-              selectedIndex: 0,
-              height: 64,
-              onDestinationSelected: (index) {
-                switch (index) {
-                  case 0:
-                    if (scroll.hasClients) {
-                      scroll.animateTo(
-                        0,
-                        duration: const Duration(milliseconds: 240),
-                        curve: Curves.easeOut,
-                      );
-                    }
-                  case 1:
-                    openSearch(context, widget.session, search.text);
-                  case 2:
-                    _openAccount('notices');
-                  case 3:
-                    _openAccount('messages');
-                  case 4:
-                    _openAccount('saved');
-                }
-              },
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(CupertinoIcons.house),
-                  selectedIcon: Icon(CupertinoIcons.house_fill),
-                  label: '首页',
-                ),
-                NavigationDestination(
-                  icon: Icon(CupertinoIcons.search),
-                  label: '搜索',
-                ),
-                NavigationDestination(
-                  icon: Icon(CupertinoIcons.bell),
-                  label: '通知',
-                ),
-                NavigationDestination(
-                  icon: Icon(CupertinoIcons.envelope),
-                  label: '私信',
-                ),
-                NavigationDestination(
-                  icon: Icon(CupertinoIcons.bookmark),
-                  label: '收藏',
-                ),
-              ],
+          ? FxNavigationBar(
+              selected: section,
+              onChanged: (index) => _selectSection(index, focus: index == 1),
             )
           : null,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             _TopBar(
               search: search,
+              searchFocus: searchFocus,
               tab: tab,
+              section: section,
+              collapsed: compact && collapsed,
               account: account,
               imageHeaders: widget.session.api.imageHeaders,
-              onSearch: () => openSearch(context, widget.session, search.text),
+              onSearch: _showSearch,
+              onSubmit: _search,
+              onCloseSearch: () => _selectSection(0),
+              onExpand: () => setState(() {
+                collapsed = false;
+                scrollTravel = 0;
+              }),
+              onHome: () => _selectSection(0),
               onTab: _switchTab,
               onAccount: _openAccount,
             ),
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => _load(reset: true),
-                child: CustomScrollView(
-                  controller: scroll,
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: _Composer(
-                        controller: composer,
-                        focusNode: composerFocus,
-                        posting: posting,
-                        visibility: visibility,
-                        media: media,
-                        api: widget.session.api,
-                        uploading: uploading,
-                        onRemove: (id) => setState(
-                          () => media.removeWhere((item) => item.id == id),
-                        ),
-                        avatarUrl: account?.avatarUrl == null
-                            ? null
-                            : account!.avatarUrl!,
-                        imageHeaders: widget.session.api.imageHeaders,
-                        name: account?.profile.name ?? '?',
-                        onVisibility: (value) =>
-                            setState(() => visibility = value),
-                        onAttach: _attach,
-                        onSubmit: _submit,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: compact ? 0 : 82,
+                    child: Offstage(
+                      offstage: compact,
+                      child: FxSidebar(
+                        selected: section,
+                        onChanged: (index) =>
+                            _selectSection(index, focus: index == 1),
                       ),
                     ),
-                    if (posts.isEmpty && loading)
-                      SliverList.list(
-                        children: const [
-                          _PostPlaceholder(),
-                          _PostPlaceholder(),
-                          _PostPlaceholder(),
-                        ],
-                      )
-                    else if (posts.isEmpty && error != null)
-                      SliverFillRemaining(
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('$error'),
-                              const SizedBox(height: 12),
-                              OutlinedButton(
-                                onPressed: () => _load(reset: true),
-                                child: const Text('重新加载'),
-                              ),
-                            ],
+                  ),
+                  Expanded(
+                    child: NotificationListener<ScrollStartNotification>(
+                      onNotification: (event) {
+                        if (event.dragDetails != null && event.depth == 0) {
+                          destination = null;
+                          navigation++;
+                        }
+                        return false;
+                      },
+                      child: PageView.builder(
+                        key: const ValueKey('home-pages'),
+                        controller: pages,
+                        itemCount: fxLabels.length,
+                        onPageChanged: (index) {
+                          if (destination != null) return;
+                          setState(() {
+                            section = index;
+                            collapsed = false;
+                          });
+                          if (index != 1) searchFocus.unfocus();
+                        },
+                        itemBuilder: (_, index) => _KeepAlivePage(
+                          key: ValueKey('section-$index-${_handle ?? 'guest'}'),
+                          child: TickerMode(
+                            enabled: section == index,
+                            child: _page(index, compact),
                           ),
                         ),
-                      )
-                    else if (posts.isEmpty)
-                      const SliverFillRemaining(
-                        child: EmptyHint('还没有帖子，发出第一条动态吧'),
-                      )
-                    else
-                      SliverPadding(
-                        padding: EdgeInsets.fromLTRB(
-                          compact ? 8 : 16,
-                          12,
-                          compact ? 8 : 16,
-                          0,
-                        ),
-                        sliver: SliverList.builder(
-                          itemCount: posts.length,
-                          itemBuilder: (_, index) {
-                            final post = posts[index];
-                            return RepaintBoundary(
-                              key: ValueKey(post.id),
-                              child: Center(
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 680,
-                                  ),
-                                  child: PostCard(
-                                    post: post,
-                                    session: widget.session,
-                                    onChanged: (next) => setState(() {
-                                      final i = posts.indexWhere(
-                                        (item) => item.id == next.id,
-                                      );
-                                      if (i >= 0) posts[i] = next;
-                                      for (final feed in feeds.values) {
-                                        final i = feed.posts.indexWhere(
-                                          (item) => item.id == next.id,
-                                        );
-                                        if (i >= 0) feed.posts[i] = next;
-                                      }
-                                    }),
-                                    onDeleted: () => setState(() {
-                                      posts.removeWhere(
-                                        (item) => item.id == post.id,
-                                      );
-                                      for (final feed in feeds.values) {
-                                        feed.posts.removeWhere(
-                                          (item) => item.id == post.id,
-                                        );
-                                      }
-                                    }),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: 96,
-                        child: Center(
-                          child: loading && posts.isNotEmpty
-                              ? const CircularProgressIndicator(strokeWidth: 2)
-                              : error != null
-                              ? TextButton(
-                                  onPressed: () => _load(reset: cursor == null),
-                                  child: const Text('加载失败，点击重试'),
-                                )
-                              : Text(
-                                  cursor == null && posts.isNotEmpty
-                                      ? '你已看完全部内容'
-                                      : '',
-                                ),
-                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -478,207 +647,189 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _TopBar extends StatelessWidget {
-  const _TopBar({
-    required this.search,
-    required this.tab,
-    required this.account,
-    required this.imageHeaders,
-    required this.onSearch,
-    required this.onTab,
-    required this.onAccount,
-  });
+class _KeepAlivePage extends StatefulWidget {
+  const _KeepAlivePage({super.key, required this.child});
+  final Widget child;
+  @override
+  State<_KeepAlivePage> createState() => _KeepAlivePageState();
+}
 
-  final TextEditingController search;
-  final String tab;
-  final Account? account;
-  final Map<String, String> imageHeaders;
-  final VoidCallback onSearch;
-  final ValueChanged<String> onTab;
-  final ValueChanged<String> onAccount;
-
+class _KeepAlivePageState extends State<_KeepAlivePage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   @override
   Widget build(BuildContext context) {
-    final tabs = <Widget>[
-      _Tab(label: '推荐', value: 'foryou', selected: tab, onTap: onTab),
-      _Tab(label: '实时', value: 'latest', selected: tab, onTap: onTab),
-      _Tab(label: '关注', value: 'following', selected: tab, onTap: onTab),
-    ];
-    final menu = PopupMenuButton<String>(
-      tooltip: '账号',
-      onSelected: onAccount,
-      itemBuilder: (_) => [
-        if (account == null)
-          const PopupMenuItem(value: 'login', child: Text('登录 / 注册'))
-        else
-          PopupMenuItem(
-            value: 'profile',
-            child: Text('@${account!.profile.handle}'),
-          ),
-        const PopupMenuItem(value: 'notices', child: Text('通知')),
-        const PopupMenuItem(value: 'messages', child: Text('私信')),
-        const PopupMenuItem(value: 'saved', child: Text('收藏')),
-        const PopupMenuItem(value: 'history', child: Text('浏览记录')),
-        const PopupMenuItem(value: 'settings', child: Text('设置')),
-        const PopupMenuItem(value: 'theme', child: Text('切换主题')),
-      ],
-      child: Container(
-        width: 44,
-        height: 44,
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          shape: BoxShape.circle,
-          border: Border.all(color: Theme.of(context).dividerColor),
-        ),
-        alignment: Alignment.center,
-        child: account == null
-            ? Icon(
-                CupertinoIcons.person,
-                color: Theme.of(context).colorScheme.onSurface,
-              )
-            : Avatar(
-                name: account!.profile.name,
-                size: 32,
-                headers: imageHeaders,
-                url: account!.avatarUrl,
-              ),
-      ),
-    );
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
-        ),
-      ),
-      child: LayoutBuilder(
-        builder: (context, size) {
-          final compact = size.maxWidth < 720;
-          final field = TextField(
-            controller: search,
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => onSearch(),
-            decoration: const InputDecoration(
-              prefixIcon: Icon(CupertinoIcons.search, size: 18),
-              hintText: '搜索 FuckXter',
-              border: InputBorder.none,
-            ),
-          );
-          if (compact) {
-            return Column(
-              children: [
-                Row(
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(left: 14),
-                      child: BrandMark(),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: '搜索',
-                      onPressed: onSearch,
-                      icon: const Icon(CupertinoIcons.search),
-                    ),
-                    menu,
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  child: Row(
-                    children: [for (final item in tabs) Expanded(child: item)],
-                  ),
-                ),
-              ],
-            );
-          }
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(22, 8, 0, 8),
-            child: Row(
-              children: [
-                const BrandMark(),
-                const SizedBox(width: 28),
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 520),
-                      child: field,
-                    ),
-                  ),
-                ),
-                Row(mainAxisSize: MainAxisSize.min, children: tabs),
-                menu,
-              ],
-            ),
-          );
-        },
-      ),
-    );
+    super.build(context);
+    return widget.child;
   }
 }
 
-class _Tab extends StatelessWidget {
-  const _Tab({
-    required this.label,
-    required this.value,
-    required this.selected,
-    required this.onTap,
+class _TopBar extends StatelessWidget {
+  const _TopBar({
+    required this.search,
+    required this.searchFocus,
+    required this.tab,
+    required this.section,
+    required this.collapsed,
+    required this.account,
+    required this.imageHeaders,
+    required this.onSearch,
+    required this.onSubmit,
+    required this.onCloseSearch,
+    required this.onExpand,
+    required this.onHome,
+    required this.onTab,
+    required this.onAccount,
   });
-
-  final String label;
-  final String value;
-  final String selected;
-  final ValueChanged<String> onTap;
+  final TextEditingController search;
+  final FocusNode searchFocus;
+  final String tab;
+  final int section;
+  final bool collapsed;
+  final Account? account;
+  final Map<String, String> imageHeaders;
+  final VoidCallback onSearch, onSubmit, onCloseSearch, onExpand, onHome;
+  final ValueChanged<String> onTab, onAccount;
 
   @override
   Widget build(BuildContext context) {
-    final active = value == selected;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return Semantics(
-      selected: active,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 3),
-        child: AnimatedContainer(
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            gradient: active
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: dark
-                        ? [const Color(0xFFF2F4F6), const Color(0xFFBDC6D1)]
-                        : [const Color(0xFF101215), const Color(0xFF465362)],
-                  )
-                : null,
-            border: Border.all(
-              color: active
-                  ? Theme.of(context).colorScheme.outline
-                  : Colors.transparent,
-            ),
-          ),
-          child: TextButton(
-            onPressed: () => onTap(value),
-            style: TextButton.styleFrom(
-              minimumSize: const Size(64, 44),
-              foregroundColor: active
-                  ? (dark ? Colors.black : Colors.white)
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-              ),
-            ),
-          ),
+    final compact = MediaQuery.sizeOf(context).width < 720;
+    final searching = section == 1;
+    final menu = Semantics(
+      button: true,
+      label: '账号',
+      child: InkWell(
+        onTap: () async {
+          final value = await showFxAccountMenu(context, account, imageHeaders);
+          if (value != null) onAccount(value);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: account == null
+              ? const SizedBox.square(
+                  dimension: 40,
+                  child: Icon(CupertinoIcons.person),
+                )
+              : FxAvatar(
+                  name: account!.profile.name,
+                  size: 44,
+                  mirror: true,
+                  headers: imageHeaders,
+                  url: account!.avatarUrl,
+                ),
         ),
       ),
+    );
+    final field = TextField(
+      key: const ValueKey('inline-search'),
+      controller: search,
+      focusNode: searchFocus,
+      textInputAction: TextInputAction.search,
+      onTap: compact ? null : onSearch,
+      onSubmitted: (_) => onSubmit(),
+      decoration: InputDecoration(
+        prefixIcon: const Icon(CupertinoIcons.search, size: 18),
+        hintText: '搜索 FuckXter',
+        border: InputBorder.none,
+        suffixIcon: searching
+            ? IconButton(
+                tooltip: '关闭搜索',
+                onPressed: onCloseSearch,
+                icon: const Icon(CupertinoIcons.xmark, size: 18),
+              )
+            : null,
+      ),
+    );
+    final feedTabs = FxTabs(
+      labels: const ['推荐', '实时', '关注'],
+      selected: ['foryou', 'latest', 'following'].indexOf(tab),
+      onChanged: (index) => onTab(['foryou', 'latest', 'following'][index]),
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 56,
+          child: Row(
+            children: [
+              if (!compact || !searching)
+                Padding(
+                  padding: const EdgeInsets.only(left: 14),
+                  child: GestureDetector(
+                    onTap: onHome,
+                    child: const BrandMark(),
+                  ),
+                ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: AnimatedSwitcher(
+                    duration: MediaQuery.disableAnimationsOf(context)
+                        ? Duration.zero
+                        : const Duration(milliseconds: 200),
+                    child: searching || !compact
+                        ? FxSurface(radius: 14, child: field)
+                        : const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+              if (compact && !searching)
+                IconButton(
+                  tooltip: '搜索',
+                  onPressed: onSearch,
+                  icon: const Icon(CupertinoIcons.search),
+                ),
+              if (!compact && section == 0)
+                SizedBox(width: 240, child: feedTabs),
+              menu,
+            ],
+          ),
+        ),
+        if (compact && section == 0)
+          AnimatedSize(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+              child: collapsed
+                  ? SizedBox(
+                      height: 28,
+                      child: Center(
+                        child: Semantics(
+                          button: true,
+                          label: '展开信息流选项',
+                          child: InkWell(
+                            key: const ValueKey('collapsed-feed-tabs'),
+                            onTap: onExpand,
+                            borderRadius: BorderRadius.circular(16),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 28),
+                              child: Icon(CupertinoIcons.ellipsis, size: 26),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : FxSurface(radius: 16, child: feedTabs),
+            ),
+          ),
+        if (section > 1)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                fxLabels[section],
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

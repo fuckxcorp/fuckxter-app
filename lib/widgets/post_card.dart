@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -6,6 +9,7 @@ import '../screens/flows.dart';
 import '../services/fuckxter_api.dart';
 import '../session.dart';
 import 'bits.dart';
+import 'fx_controls.dart';
 
 class PostCard extends StatefulWidget {
   const PostCard({
@@ -15,8 +19,10 @@ class PostCard extends StatefulWidget {
     this.onChanged,
     this.onOpen,
     this.onDeleted,
+    this.detail = false,
   });
 
+  final bool detail;
   final Post post;
   final AppSession session;
   final ValueChanged<Post>? onChanged;
@@ -68,162 +74,211 @@ class _PostCardState extends State<PostCard> {
   Widget build(BuildContext context) {
     final shown = post;
     final compact = MediaQuery.sizeOf(context).width < 720;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: EdgeInsets.fromLTRB(
-        compact ? 12 : 18,
-        16,
-        compact ? 12 : 18,
-        10,
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (post.repostKind == 'repost')
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8, left: 56),
-              child: Text(
-                '${post.author.name} 转发了',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              GestureDetector(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.detail
+          ? null
+          : widget.onOpen ?? () => openPost(context, widget.session, shown),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 0,
+              left: 0,
+              child: GestureDetector(
                 onTap: () =>
                     openProfile(context, widget.session, shown.author.handle),
-                child: Avatar(
+                child: FxAvatar(
                   name: shown.author.name,
-                  size: 44,
+                  size: compact ? 60 : 64,
                   headers: api.imageHeaders,
                   url: shown.author.avatarUrl,
                 ),
               ),
-              SizedBox(width: compact ? 10 : 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 6,
-                      children: [
-                        Text(
-                          shown.author.name,
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        if (shown.author.verified)
-                          const Icon(
-                            Icons.verified,
-                            size: 15,
-                            color: Color(0xFF5B7AA8),
-                          ),
-                        Text(
-                          '@${shown.author.handle} · ${relativeTime(shown.createdAt)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        if (shown.visibility != 'public')
-                          Text(
-                            visibilityLabel(shown.visibility),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                      ],
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                compact ? 70 : 76,
+                12,
+                compact ? 12 : 16,
+                8,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (post.repostKind == 'repost')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        '${post.author.name} 转发了',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
-                    const SizedBox(height: 7),
-                    if (post.repostKind != 'repost')
-                      GestureDetector(
-                        onTap:
-                            widget.onOpen ??
-                            () => openPost(context, widget.session, shown),
-                        child: Text(
-                          shown.text,
-                          style: const TextStyle(fontSize: 15.5, height: 1.45),
-                        ),
-                      ),
-                    if (post.repostKind != null && post.source != null)
-                      _Quote(post: post.source!, session: widget.session),
-                    if (post.repostKind != null && post.source == null)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Text('原帖已删除或不可见'),
-                      ),
-                    if (post.repostKind != 'repost' && shown.media.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: _MediaStrip(media: shown.media, api: api),
-                      ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        CountAction(
-                          label: '评论',
-                          icon: CupertinoIcons.chat_bubble,
-                          value: shown.stats.replies,
-                          onTap: () => openPost(context, widget.session, shown),
-                        ),
-                        CountAction(
-                          label: '转发与更多操作',
-                          icon: CupertinoIcons.repeat,
-                          value: shown.stats.reposts,
-                          active: shown.reposted,
-                          activeColor: const Color(0xFF00BA7C),
-                          onTap: () => _repostMenu(shown),
-                        ),
-                        CountAction(
-                          label: shown.liked ? '取消点赞' : '点赞',
-                          icon: shown.liked
-                              ? CupertinoIcons.heart_fill
-                              : CupertinoIcons.heart,
-                          value: shown.stats.likes,
-                          active: shown.liked,
-                          activeColor: const Color(0xFFF91880),
-                          onTap: () => _run(() async {
-                            final next = !shown.liked;
-                            final result = await api.setLike(shown.id, next);
-                            _emit(
-                              shown.copyWith(
-                                liked: result.liked,
-                                stats: shown.stats.copyWith(
-                                  likes: result.likes,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
+                              children: [
+                                Text(
+                                  shown.author.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                if (shown.author.verified)
+                                  const Icon(
+                                    Icons.verified,
+                                    size: 15,
+                                    color: Color(0xFF5B7AA8),
+                                  ),
+                                Text(
+                                  '@${shown.author.handle} · ${relativeTime(shown.createdAt)}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                if (shown.visibility != 'public')
+                                  Text(
+                                    visibilityLabel(shown.visibility),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 7),
+                            if (post.repostKind != 'repost')
+                              GestureDetector(
+                                onTap:
+                                    widget.onOpen ??
+                                    () => openPost(
+                                      context,
+                                      widget.session,
+                                      shown,
+                                    ),
+                                child: Text(
+                                  shown.text,
+                                  maxLines: widget.detail
+                                      ? null
+                                      : (shown.media.isEmpty ? 5 : 3),
+                                  overflow: widget.detail
+                                      ? null
+                                      : TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 15.5,
+                                    height: 1.45,
+                                  ),
                                 ),
                               ),
-                            );
-                          }),
+                            if (post.repostKind != null && post.source != null)
+                              _Quote(
+                                post: post.source!,
+                                session: widget.session,
+                              ),
+                            if (post.repostKind != null && post.source == null)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: Text('原帖已删除或不可见'),
+                              ),
+                            if (post.repostKind != 'repost' &&
+                                shown.media.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: _MediaStrip(
+                                  media: shown.media,
+                                  api: api,
+                                ),
+                              ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
+                                CountAction(
+                                  label: '评论',
+                                  icon: CupertinoIcons.chat_bubble,
+                                  value: shown.stats.replies,
+                                  onTap:
+                                      widget.onOpen ??
+                                      () => openPost(
+                                        context,
+                                        widget.session,
+                                        shown,
+                                      ),
+                                ),
+                                CountAction(
+                                  label: '转发与更多操作',
+                                  icon: CupertinoIcons.repeat,
+                                  value: shown.stats.reposts,
+                                  active: shown.reposted,
+                                  activeColor: const Color(0xFF00BA7C),
+                                  onTap: () => _repostMenu(shown),
+                                ),
+                                CountAction(
+                                  label: shown.liked ? '取消点赞' : '点赞',
+                                  icon: shown.liked
+                                      ? CupertinoIcons.heart_fill
+                                      : CupertinoIcons.heart,
+                                  value: shown.stats.likes,
+                                  active: shown.liked,
+                                  activeColor: const Color(0xFFF91880),
+                                  onTap: () => _run(() async {
+                                    final next = !shown.liked;
+                                    final result = await api.setLike(
+                                      shown.id,
+                                      next,
+                                    );
+                                    _emit(
+                                      shown.copyWith(
+                                        liked: result.liked,
+                                        stats: shown.stats.copyWith(
+                                          likes: result.likes,
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ),
+                                CountAction(
+                                  label: shown.saved ? '取消收藏' : '收藏',
+                                  icon: shown.saved
+                                      ? CupertinoIcons.bookmark_fill
+                                      : CupertinoIcons.bookmark,
+                                  active: shown.saved,
+                                  onTap: () => _run(() async {
+                                    final next = !shown.saved;
+                                    await api.setSave(shown.id, next);
+                                    _emit(shown.copyWith(saved: next));
+                                  }),
+                                ),
+                                CountAction(
+                                  label: '复制链接',
+                                  icon: CupertinoIcons.share,
+                                  onTap: () =>
+                                      copyText(context, api.postWebUrl(shown)),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        CountAction(
-                          label: shown.saved ? '取消收藏' : '收藏',
-                          icon: shown.saved
-                              ? CupertinoIcons.bookmark_fill
-                              : CupertinoIcons.bookmark,
-                          active: shown.saved,
-                          onTap: () => _run(() async {
-                            final next = !shown.saved;
-                            await api.setSave(shown.id, next);
-                            _emit(shown.copyWith(saved: next));
-                          }),
-                        ),
-                        CountAction(
-                          label: '复制链接',
-                          icon: CupertinoIcons.share,
-                          onTap: () => copyText(context, api.postWebUrl(shown)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -349,162 +404,356 @@ class _Quote extends StatelessWidget {
   );
 }
 
-class _MediaStrip extends StatelessWidget {
+class _MediaStrip extends StatefulWidget {
   const _MediaStrip({required this.media, required this.api});
   final List<PostMedia> media;
   final FuckXterApi api;
+  @override
+  State<_MediaStrip> createState() => _MediaStripState();
+}
 
-  Widget _tile(BuildContext context, int index) => Semantics(
-    button: true,
-    label: '查看图片 ${index + 1}/${media.length} ${media[index].alt}',
-    child: InkWell(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => _Gallery(media: media, api: api, initial: index),
-        ),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          NetImage(
-            url: media[index].url,
-            fit: BoxFit.cover,
-            headers: api.imageHeaders,
-          ),
-          if (index == 3 && media.length > 4)
-            ColoredBox(
-              color: Colors.black54,
-              child: Center(
-                child: Text(
-                  '+${media.length - 4}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
+class _MediaStripState extends State<_MediaStrip> {
+  final ratios = <String, double>{};
+  final scroll = ScrollController();
+  bool previous = false, next = false;
+  @override
+  void initState() {
+    super.initState();
+    scroll.addListener(_sync);
+  }
+
+  @override
+  void dispose() {
+    scroll.dispose();
+    super.dispose();
+  }
+
+  void _sync() {
+    if (!mounted || !scroll.hasClients) return;
+    final prev = scroll.offset > 2;
+    final following = scroll.position.extentAfter > 2;
+    if (prev != previous || following != next) {
+      setState(() {
+        previous = prev;
+        next = following;
+      });
+    }
+  }
+
+  void _move(int direction) {
+    if (!scroll.hasClients) return;
+    scroll.animateTo(
+      (scroll.offset + direction * scroll.position.viewportDimension * .86)
+          .clamp(0, scroll.position.maxScrollExtent),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      final cap = math.min(MediaQuery.sizeOf(context).height * .42, 360.0);
+      final available = box.maxWidth;
+      final maxWidth = available * (widget.media.length > 1 ? .86 : 1);
+      final tiles = <Widget>[];
+      for (var i = 0; i < widget.media.length; i++) {
+        final item = widget.media[i];
+        final ratio = ratios[item.url] ?? 4 / 3;
+        final tall = ratio < .5;
+        final width = tall ? maxWidth : math.min(maxWidth, cap * ratio);
+        final height = tall ? cap : width / ratio;
+        tiles.add(
+          Semantics(
+            button: true,
+            label: '查看图片 ${i + 1}/${widget.media.length} ${item.alt}',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: width,
+                height: height,
+                child: InkWell(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => MediaGallery(
+                        media: widget.media,
+                        api: widget.api,
+                        initial: i,
+                        ratios: Map.of(ratios),
+                      ),
+                    ),
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      NetImage(
+                        key: ValueKey(item.url),
+                        url: item.url,
+                        fit: tall ? BoxFit.cover : BoxFit.contain,
+                        alignment: tall
+                            ? Alignment.topCenter
+                            : Alignment.center,
+                        width: width,
+                        height: height,
+                        decodeWidth: available,
+                        headers: widget.api.imageHeaders,
+                        focus: true,
+                        onDimensions: (size) {
+                          final value = size.width / size.height;
+                          if ((value - (ratios[item.url] ?? 0)).abs() > .001 &&
+                              mounted) {
+                            setState(() => ratios[item.url] = value);
+                          }
+                        },
+                      ),
+                      if (tall)
+                        const Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: 48,
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Color(0x66000000),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
             ),
-        ],
-      ),
-    ),
-  );
-
-  @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(12),
-    child: AspectRatio(
-      aspectRatio: media.length == 1 ? 4 / 3 : 3 / 2,
-      child: media.length == 1
-          ? _tile(context, 0)
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          ),
+        );
+      }
+      if (tiles.length == 1) return tiles.first;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
+      return Stack(
+        alignment: Alignment.center,
+        children: [
+          SingleChildScrollView(
+            controller: scroll,
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: media.length < 4
-                      ? _tile(context, 0)
-                      : Column(
-                          children: [
-                            Expanded(child: _tile(context, 0)),
-                            const SizedBox(height: 4),
-                            Expanded(child: _tile(context, 2)),
-                          ],
-                        ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: media.length == 2
-                      ? _tile(context, 1)
-                      : Column(
-                          children: [
-                            Expanded(child: _tile(context, 1)),
-                            const SizedBox(height: 4),
-                            Expanded(
-                              child: _tile(context, media.length == 3 ? 2 : 3),
-                            ),
-                          ],
-                        ),
-                ),
+                for (var i = 0; i < tiles.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  tiles[i],
+                ],
               ],
             ),
+          ),
+          if (previous) Positioned(left: 4, child: _arrow(-1)),
+          if (next) Positioned(right: 4, child: _arrow(1)),
+        ],
+      );
+    },
+  );
+  Widget _arrow(int direction) => SizedBox.square(
+    dimension: 32,
+    child: IconButton(
+      padding: EdgeInsets.zero,
+      tooltip: direction < 0 ? '上一张' : '下一张',
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.black.withValues(alpha: .55),
+        foregroundColor: Colors.white,
+      ),
+      onPressed: () => _move(direction),
+      icon: Icon(
+        direction < 0
+            ? CupertinoIcons.chevron_left
+            : CupertinoIcons.chevron_right,
+        size: 18,
+      ),
     ),
   );
 }
 
-class _Gallery extends StatefulWidget {
-  const _Gallery({
+class MediaGallery extends StatefulWidget {
+  const MediaGallery({
+    super.key,
     required this.media,
     required this.api,
     required this.initial,
+    this.ratios = const {},
   });
   final List<PostMedia> media;
   final FuckXterApi api;
   final int initial;
-
+  final Map<String, double> ratios;
   @override
-  State<_Gallery> createState() => _GalleryState();
+  State<MediaGallery> createState() => _MediaGalleryState();
 }
 
-class _GalleryState extends State<_Gallery> {
+class _MediaGalleryState extends State<MediaGallery>
+    with SingleTickerProviderStateMixin {
   late final controller = PageController(initialPage: widget.initial);
+  late final resize = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+  )..value = 1;
+  late final ratios = Map<String, double>.of(widget.ratios);
+  final previous = <String, double>{};
   late int index = widget.initial;
+
+  double _ratio(String url) => ui.lerpDouble(
+    previous[url] ?? ratios[url] ?? 4 / 3,
+    ratios[url] ?? 4 / 3,
+    Curves.easeOutCubic.transform(resize.value),
+  )!;
+  void _size(String url, Size size) {
+    final value = size.width / size.height;
+    if (!mounted || (value - (ratios[url] ?? 0)).abs() < .001) return;
+    final snapshot = {
+      for (final item in widget.media) item.url: _ratio(item.url),
+    };
+    setState(() {
+      previous
+        ..clear()
+        ..addAll(snapshot);
+      ratios[url] = value;
+    });
+    if (MediaQuery.disableAnimationsOf(context)) {
+      resize.value = 1;
+    } else {
+      resize.forward(from: 0);
+    }
+  }
+
+  void _move(int direction) {
+    final next = (index + direction).clamp(0, widget.media.length - 1);
+    if (next == index) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      controller.jumpToPage(next);
+    } else {
+      controller.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOutCubic,
+      );
+    }
+  }
 
   @override
   void dispose() {
     controller.dispose();
+    resize.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text('${index + 1} / ${widget.media.length}')),
+    backgroundColor: Colors.black,
+    appBar: AppBar(
+      backgroundColor: Colors.black,
+      foregroundColor: Colors.white,
+      title: Text('${index + 1} / ${widget.media.length}'),
+    ),
     body: Column(
       children: [
         Expanded(
-          child: PageView.builder(
-            controller: controller,
-            itemCount: widget.media.length,
-            onPageChanged: (value) => setState(() => index = value),
-            itemBuilder: (_, i) => InteractiveViewer(
-              minScale: 1,
-              maxScale: 5,
-              child: Center(
-                child: NetImage(
-                  url: widget.media[i].url,
-                  fit: BoxFit.contain,
-                  width: MediaQuery.sizeOf(context).width,
-                  height: MediaQuery.sizeOf(context).height - 160,
-                  headers: widget.api.imageHeaders,
+          child: LayoutBuilder(
+            builder: (context, box) {
+              double height(int i) {
+                final ratio = _ratio(widget.media[i].url);
+                return ratio < .5
+                    ? box.maxHeight
+                    : math.min(box.maxHeight, box.maxWidth / ratio);
+              }
+
+              return AnimatedBuilder(
+                animation: Listenable.merge([controller, resize]),
+                child: PageView.builder(
+                  controller: controller,
+                  itemCount: widget.media.length,
+                  onPageChanged: (value) => setState(() => index = value),
+                  itemBuilder: (_, i) {
+                    final item = widget.media[i];
+                    final tall = (ratios[item.url] ?? 1) < .5;
+                    final image = NetImage(
+                      url: item.url,
+                      fit: BoxFit.contain,
+                      width: box.maxWidth,
+                      height: tall ? null : double.infinity,
+                      decodeWidth: box.maxWidth,
+                      headers: widget.api.imageHeaders,
+                      onDimensions: (size) => _size(item.url, size),
+                    );
+                    return InteractiveViewer(
+                      minScale: 1,
+                      maxScale: 5,
+                      child: tall
+                          ? SingleChildScrollView(child: image)
+                          : Center(child: image),
+                    );
+                  },
                 ),
-              ),
-            ),
+                builder: (context, child) {
+                  final page =
+                      (controller.hasClients
+                              ? controller.page ?? index.toDouble()
+                              : index.toDouble())
+                          .clamp(0.0, widget.media.length - 1.0);
+                  final first = page.floor();
+                  final last = page.ceil();
+                  final progress = Curves.easeInOutCubic.transform(
+                    page - first,
+                  );
+                  return Center(
+                    child: SizedBox(
+                      key: const ValueKey('gallery-viewport'),
+                      height: ui.lerpDouble(
+                        height(first),
+                        height(last),
+                        progress,
+                      ),
+                      width: box.maxWidth,
+                      child: child,
+                    ),
+                  );
+                },
+              );
+            },
           ),
         ),
-        SafeArea(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                tooltip: '上一张',
-                onPressed: index == 0
-                    ? null
-                    : () => controller.previousPage(
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOut,
-                      ),
-                icon: const Icon(Icons.chevron_left),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: FxSurface(
+            radius: 22,
+            child: SafeArea(
+              top: false,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    tooltip: '上一张',
+                    color: Colors.white,
+                    onPressed: index == 0 ? null : () => _move(-1),
+                    icon: const Icon(CupertinoIcons.chevron_left),
+                  ),
+                  IconButton(
+                    tooltip: '下一张',
+                    color: Colors.white,
+                    onPressed: index + 1 == widget.media.length
+                        ? null
+                        : () => _move(1),
+                    icon: const Icon(CupertinoIcons.chevron_right),
+                  ),
+                ],
               ),
-              IconButton(
-                tooltip: '下一张',
-                onPressed: index + 1 == widget.media.length
-                    ? null
-                    : () => controller.nextPage(
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOut,
-                      ),
-                icon: const Icon(Icons.chevron_right),
-              ),
-            ],
+            ),
           ),
         ),
       ],

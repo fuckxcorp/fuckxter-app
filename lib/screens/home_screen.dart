@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n.dart';
 import '../models/models.dart';
 import '../services/fuckxter_api.dart';
 import '../session.dart';
@@ -9,7 +10,6 @@ import '../widgets/bits.dart';
 import '../widgets/post_card.dart';
 import '../widgets/fx_controls.dart';
 import '../widgets/fx_motion.dart';
-import '../widgets/fx_account_menu.dart';
 import 'flows.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -90,13 +90,12 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _selectSection(int index, {bool focus = false}) async {
-    if (index == 4) {
-      final value = await showFxAccountMenu(
-        context,
-        widget.session.account,
-        widget.session.api.imageHeaders,
-      );
-      if (value != null && mounted) await _openAccount(value);
+    if (index == 3) {
+      await _guarded(() async {
+        final handle = widget.session.account?.profile.handle;
+        if (handle != null && mounted)
+          openProfile(context, widget.session, handle);
+      });
       return;
     }
     if (index == section && index == 0 && scroll.hasClients) {
@@ -286,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen>
         FocusManager.instance.primaryFocus?.unfocus();
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('已发布')));
+        ).showSnackBar(const SnackBar(content: AppText('已发布')));
         await _load(reset: true);
       } catch (error) {
         if (mounted) showError(context, error);
@@ -333,30 +332,6 @@ class _HomeScreenState extends State<HomeScreen>
         if (mounted) setState(() => uploading = false);
       }
     });
-  }
-
-  Future<void> _openAccount(String value) async {
-    switch (value) {
-      case 'login':
-        await openLogin(context, widget.session);
-      case 'theme':
-        widget.session.toggleTheme();
-      case 'notices':
-        await _selectSection(2);
-      case 'messages':
-        await _selectSection(3);
-      case 'saved':
-        await _guarded(() async {
-          openSaved(context, widget.session);
-        });
-      case 'history':
-        openHistory(context, widget.session);
-      case 'settings':
-        openSettings(context, widget.session);
-      case 'profile':
-        final handle = widget.session.account?.profile.handle;
-        if (handle != null) openProfile(context, widget.session, handle);
-    }
   }
 
   Future<void> _openFeedPost(Post post) async {
@@ -420,7 +395,7 @@ class _HomeScreenState extends State<HomeScreen>
             const SizedBox(height: 12),
             FilledButton(
               onPressed: () => openLogin(context, widget.session),
-              child: const Text('登录 / 注册'),
+              child: const AppText('登录 / 注册'),
             ),
           ],
         ),
@@ -431,11 +406,6 @@ class _HomeScreenState extends State<HomeScreen>
         session: widget.session,
         embedded: true,
         active: section == 2,
-      ),
-      3 => MessagesScreen(
-        session: widget.session,
-        embedded: true,
-        active: section == 3,
       ),
       _ => const SizedBox.shrink(),
     };
@@ -485,7 +455,7 @@ class _HomeScreenState extends State<HomeScreen>
                   const SizedBox(height: 12),
                   OutlinedButton(
                     onPressed: () => _load(reset: true),
-                    child: const Text('重新加载'),
+                    child: const AppText('重新加载'),
                   ),
                 ],
               ),
@@ -555,7 +525,7 @@ class _HomeScreenState extends State<HomeScreen>
                   : error != null
                   ? TextButton(
                       onPressed: () => _load(reset: cursor == null),
-                      child: const Text('加载失败，点击重试'),
+                      child: const AppText('加载失败，点击重试'),
                     )
                   : Text(cursor == null && posts.isNotEmpty ? '你已看完全部内容' : ''),
             ),
@@ -937,9 +907,18 @@ class _Composer extends StatelessWidget {
                           initialValue: visibility,
                           onSelected: onVisibility,
                           itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'public', child: Text('公开')),
-                            PopupMenuItem(value: 'mutual', child: Text('互关可见')),
-                            PopupMenuItem(value: 'private', child: Text('仅自己')),
+                            PopupMenuItem(
+                              value: 'public',
+                              child: AppText('公开'),
+                            ),
+                            PopupMenuItem(
+                              value: 'mutual',
+                              child: AppText('互关可见'),
+                            ),
+                            PopupMenuItem(
+                              value: 'private',
+                              child: AppText('仅自己'),
+                            ),
                           ],
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8),

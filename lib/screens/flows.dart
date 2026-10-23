@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n.dart';
 import '../models/models.dart';
 import '../services/fuckxter_api.dart';
 import '../session.dart';
@@ -9,6 +10,7 @@ import '../widgets/bits.dart';
 import '../widgets/post_card.dart';
 import '../widgets/fx_motion.dart';
 import '../widgets/fx_controls.dart';
+import 'preferences_screen.dart';
 
 Future<bool> openLogin(BuildContext context, AppSession session) async {
   final ok = await Navigator.of(context).push<bool>(
@@ -91,9 +93,9 @@ void openHistory(BuildContext context, AppSession session) {
 }
 
 void openSettings(BuildContext context, AppSession session) {
-  Navigator.of(
-    context,
-  ).push(MaterialPageRoute(builder: (_) => SettingsScreen(session: session)));
+  Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => PreferencesScreen(session: session)),
+  );
 }
 
 class LoginScreen extends StatefulWidget {
@@ -165,7 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('登录 / 注册')),
+      appBar: AppBar(title: const AppText('登录 / 注册')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -423,7 +425,7 @@ class _PostScreenState extends State<PostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('帖子')),
+      appBar: AppBar(title: const AppText('帖子')),
       body: Column(
         children: [
           Expanded(
@@ -598,6 +600,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  late String currentHandle = widget.handle;
   UserProfile? user;
   List<Post> posts = const [];
   Object? error;
@@ -616,8 +619,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
     try {
       final (profile, items) = await (
-        widget.session.api.profile(widget.handle),
-        widget.session.api.postsByUser(widget.handle),
+        widget.session.api.profile(currentHandle),
+        widget.session.api.postsByUser(currentHandle),
       ).wait;
       if (!mounted) return;
       setState(() {
@@ -670,7 +673,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final user = this.user;
     return Scaffold(
-      appBar: AppBar(title: Text('@${widget.handle}')),
+      appBar: AppBar(
+        title: Text('@$currentHandle'),
+        actions: [
+          if (widget.session.account?.profile.handle == currentHandle)
+            PopupMenuButton<String>(
+              tooltip: tr(context, '个人主页选项'),
+              icon: const Icon(CupertinoIcons.gear),
+              onSelected: (value) async {
+                switch (value) {
+                  case 'settings':
+                    openSettings(context, widget.session);
+                  case 'edit':
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => SettingsScreen(session: widget.session),
+                      ),
+                    );
+                    if (mounted) {
+                      currentHandle =
+                          widget.session.account?.profile.handle ??
+                          currentHandle;
+                      await _load();
+                    }
+                  case 'messages':
+                    openMessages(context, widget.session);
+                  case 'saved':
+                    openSaved(context, widget.session);
+                  case 'history':
+                    openHistory(context, widget.session);
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'settings', child: AppText('设置')),
+                PopupMenuItem(value: 'edit', child: AppText('编辑个人资料')),
+                PopupMenuItem(value: 'messages', child: AppText('私信')),
+                PopupMenuItem(value: 'saved', child: AppText('收藏')),
+                PopupMenuItem(value: 'history', child: AppText('历史记录')),
+              ],
+            ),
+        ],
+      ),
       body: loading
           ? const LoadingPane()
           : error != null
@@ -691,6 +734,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       key: ValueKey(item.id),
                       post: item,
                       session: widget.session,
+                      onChanged: (next) => setState(() {
+                        posts = [
+                          for (final post in posts)
+                            post.id == next.id ? next : post,
+                        ];
+                      }),
+                      onDeleted: () => setState(() {
+                        posts = posts
+                            .where((post) => post.id != item.id)
+                            .toList();
+                      }),
                     );
                   }
                   return Column(
@@ -735,7 +789,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (user.deleted)
                         const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Text('这个账号已申请删除。'),
+                          child: AppText('这个账号已申请删除。'),
                         ),
                       if (user.bio.isNotEmpty)
                         Padding(
@@ -793,7 +847,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   if (user.canMessage)
                                     const PopupMenuItem(
                                       value: 'message',
-                                      child: Text('私信'),
+                                      child: AppText('私信'),
                                     ),
                                   PopupMenuItem(
                                     value: 'block',
@@ -959,7 +1013,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: widget.embedded ? null : AppBar(title: const Text('通知')),
+      appBar: widget.embedded ? null : AppBar(title: const AppText('通知')),
       body: loading
           ? const LoadingPane()
           : error != null
@@ -1053,7 +1107,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: widget.embedded ? null : AppBar(title: const Text('私信')),
+      appBar: widget.embedded ? null : AppBar(title: const AppText('私信')),
       body: loading
           ? const LoadingPane()
           : error != null
@@ -1170,7 +1224,42 @@ class _ThreadScreenState extends State<ThreadScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('@${widget.handle}')),
+      appBar: AppBar(
+        title: Text('@${widget.handle}'),
+        actions: [
+          if (widget.session.account?.profile.handle == widget.handle)
+            PopupMenuButton<String>(
+              tooltip: tr(context, '个人主页选项'),
+              icon: const Icon(CupertinoIcons.gear),
+              onSelected: (value) async {
+                switch (value) {
+                  case 'settings':
+                    openSettings(context, widget.session);
+                  case 'edit':
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => SettingsScreen(session: widget.session),
+                      ),
+                    );
+                    if (mounted) await _load();
+                  case 'messages':
+                    openMessages(context, widget.session);
+                  case 'saved':
+                    openSaved(context, widget.session);
+                  case 'history':
+                    openHistory(context, widget.session);
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'settings', child: AppText('设置')),
+                PopupMenuItem(value: 'edit', child: AppText('编辑个人资料')),
+                PopupMenuItem(value: 'messages', child: AppText('私信')),
+                PopupMenuItem(value: 'saved', child: AppText('收藏')),
+                PopupMenuItem(value: 'history', child: AppText('历史记录')),
+              ],
+            ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
@@ -1311,7 +1400,7 @@ class _SavedScreenState extends State<SavedScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: widget.embedded ? null : AppBar(title: const Text('收藏')),
+      appBar: widget.embedded ? null : AppBar(title: const AppText('收藏')),
       body: loading
           ? const LoadingPane()
           : error != null
@@ -1339,7 +1428,7 @@ class HistoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = session.history;
     return Scaffold(
-      appBar: AppBar(title: const Text('浏览记录')),
+      appBar: AppBar(title: const AppText('浏览记录')),
       body: items.isEmpty
           ? const EmptyHint('打开过的帖子会记在这里')
           : ListView.builder(
@@ -1366,7 +1455,12 @@ class HistoryScreen extends StatelessWidget {
 }
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.session});
+  const SettingsScreen({
+    super.key,
+    required this.session,
+    this.security = false,
+  });
+  final bool security;
   final AppSession session;
 
   @override
@@ -1466,118 +1560,127 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final account = widget.session.account;
     if (account == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('设置')),
+        appBar: AppBar(title: AppText(widget.security ? '账号安全' : '编辑个人资料')),
         body: Center(
           child: FilledButton(
             onPressed: () => openLogin(context, widget.session),
-            child: const Text('登录'),
+            child: const AppText('登录'),
           ),
         ),
       );
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      appBar: AppBar(title: AppText(widget.security ? '账号安全' : '编辑个人资料')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('邮箱 ${account.profile.email}'),
-          TextField(
-            controller: name,
-            decoration: const InputDecoration(labelText: '名字'),
-          ),
-          TextField(
-            controller: handle,
-            decoration: const InputDecoration(labelText: '用户名'),
-          ),
-          TextField(
-            controller: bio,
-            decoration: const InputDecoration(labelText: '简介'),
-            maxLines: 3,
-          ),
-          TextField(
-            controller: region,
-            decoration: const InputDecoration(labelText: '地区'),
-          ),
-          TextField(
-            controller: gender,
-            decoration: const InputDecoration(labelText: '性别'),
-          ),
-          TextField(
-            controller: birthday,
-            decoration: const InputDecoration(labelText: '生日'),
-          ),
-          const SizedBox(height: 8),
-          DropdownButton<String>(
-            value: policy,
-            items: const [
-              DropdownMenuItem(value: 'everyone', child: Text('所有人可私信')),
-              DropdownMenuItem(value: 'mutual', child: Text('仅互关可私信')),
-              DropdownMenuItem(value: 'nobody', child: Text('不接收私信')),
-            ],
-            onChanged: (value) async {
-              if (value == null) return;
-              final next = await widget.session.api.setDmPolicy(value);
-              widget.session.replaceAccount(next);
-              setState(() => policy = value);
-            },
-          ),
-          Wrap(
-            spacing: 8,
-            children: [
-              OutlinedButton(
-                onPressed: () => _pick(false),
-                child: const Text('更换头像'),
-              ),
-              OutlinedButton(
-                onPressed: () => _pick(true),
-                child: const Text('更换头图'),
-              ),
-              OutlinedButton(
-                onPressed: () async {
-                  await widget.session.api.removeAvatar();
-                  await widget.session.refreshAccount();
-                },
-                child: const Text('移除头像'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          FilledButton(onPressed: _save, child: const Text('保存资料')),
-          TextButton(
-            onPressed: () => _password(context),
-            child: const Text('修改密码'),
-          ),
-          TextButton(
-            onPressed: () => _twoFactor(context),
-            child: Text(account.twoFactorEnabled ? '双重验证已开启' : '开启双重验证'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final ok = await confirm(context, '退出', '退出当前账号？');
-              if (!ok || !context.mounted) return;
-              await widget.session.logout();
-              if (context.mounted) {
-                Navigator.popUntil(context, (route) => route.isFirst);
-              }
-            },
-            child: const Text('退出登录'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final ok = await confirm(
-                context,
-                '删除账号',
-                '申请删除后有 3 天宽限期，期间登录会取消删除。',
-              );
-              if (!ok || !context.mounted) return;
-              await widget.session.api.deleteAccount();
-              await widget.session.logout();
-              if (context.mounted) {
-                Navigator.popUntil(context, (route) => route.isFirst);
-              }
-            },
-            child: const Text('申请删除账号'),
-          ),
+          if (!widget.security) ...[
+            Text('邮箱 ${account.profile.email}'),
+            TextField(
+              controller: name,
+              decoration: InputDecoration(labelText: tr(context, '名字')),
+            ),
+            TextField(
+              controller: handle,
+              decoration: InputDecoration(labelText: tr(context, '用户名')),
+            ),
+            TextField(
+              controller: bio,
+              decoration: InputDecoration(labelText: tr(context, '简介')),
+              maxLines: 3,
+            ),
+            TextField(
+              controller: region,
+              decoration: InputDecoration(labelText: tr(context, '地区')),
+            ),
+            TextField(
+              controller: gender,
+              decoration: InputDecoration(labelText: tr(context, '性别')),
+            ),
+            TextField(
+              controller: birthday,
+              decoration: InputDecoration(labelText: tr(context, '生日')),
+            ),
+            const SizedBox(height: 8),
+            DropdownButton<String>(
+              value: policy,
+              items: const [
+                DropdownMenuItem(value: 'everyone', child: AppText('所有人可私信')),
+                DropdownMenuItem(value: 'mutual', child: AppText('仅互关可私信')),
+                DropdownMenuItem(value: 'nobody', child: AppText('不接收私信')),
+              ],
+              onChanged: (value) async {
+                if (value == null) return;
+                final next = await widget.session.api.setDmPolicy(value);
+                widget.session.replaceAccount(next);
+                setState(() => policy = value);
+              },
+            ),
+            Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton(
+                  onPressed: () => _pick(false),
+                  child: const AppText('更换头像'),
+                ),
+                OutlinedButton(
+                  onPressed: () => _pick(true),
+                  child: const AppText('更换头图'),
+                ),
+                OutlinedButton(
+                  onPressed: () async {
+                    await widget.session.api.removeAvatar();
+                    await widget.session.refreshAccount();
+                  },
+                  child: const AppText('移除头像'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            FilledButton(onPressed: _save, child: const AppText('保存资料')),
+          ],
+          if (widget.security) ...[
+            TextButton(
+              onPressed: () => _password(context),
+              child: const AppText('修改密码'),
+            ),
+            TextButton(
+              onPressed: () => _twoFactor(context),
+              child: AppText(account.twoFactorEnabled ? '双重验证已开启' : '开启双重验证'),
+            ),
+            TextButton(
+              onPressed: () async {
+                final ok = await confirm(context, '退出', '退出当前账号？');
+                if (!ok || !context.mounted) return;
+                await widget.session.logout();
+                if (context.mounted) {
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                }
+              },
+              child: const AppText('退出登录'),
+            ),
+            TextButton(
+              onPressed: () async {
+                final ok = await confirm(
+                  context,
+                  '删除账号',
+                  '申请删除后有 3 天宽限期，期间登录会取消删除。',
+                );
+                if (!ok || !context.mounted) return;
+                try {
+                  await widget.session.api.deleteAccount();
+                  await widget.session.logout();
+                } catch (error) {
+                  if (mounted) setState(() => status = '$error');
+                  return;
+                }
+                if (context.mounted) {
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                }
+              },
+              child: const AppText('申请删除账号'),
+            ),
+          ],
           if (status.isNotEmpty) Text(status),
         ],
       ),
@@ -1590,30 +1693,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('修改密码'),
+        title: const AppText('修改密码'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: current,
               obscureText: true,
-              decoration: const InputDecoration(labelText: '当前密码'),
+              decoration: InputDecoration(labelText: tr(context, '当前密码')),
             ),
             TextField(
               controller: next,
               obscureText: true,
-              decoration: const InputDecoration(labelText: '新密码'),
+              decoration: InputDecoration(labelText: tr(context, '新密码')),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: const AppText('取消'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('保存'),
+            child: const AppText('保存'),
           ),
         ],
       ),
@@ -1630,40 +1733,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<Map<String, String>?> _securityProof(
+    BuildContext context,
+    bool enabled,
+  ) async {
+    final password = TextEditingController();
+    final code = TextEditingController();
+    try {
+      return await showDialog<Map<String, String>>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const AppText('验证身份'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: password,
+                obscureText: true,
+                decoration: InputDecoration(labelText: tr(context, '当前密码')),
+              ),
+              if (enabled)
+                TextField(
+                  controller: code,
+                  decoration: InputDecoration(
+                    labelText: tr(context, '当前动态验证码'),
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const AppText('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, {
+                'password': password.text,
+                if (enabled) 'code': code.text.trim(),
+              }),
+              child: const AppText('确认'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      password.dispose();
+      code.dispose();
+    }
+  }
+
   Future<void> _twoFactor(BuildContext context) async {
     final enabled = widget.session.account?.twoFactorEnabled ?? false;
     final proceed = await confirm(
       context,
       '开启双重验证',
-      enabled ? '继续会先关闭现在的双重验证，并作废旧的验证器密钥。' : '接下来会生成新的验证器密钥。',
+      enabled ? '验证身份后可更换验证器。完成新验证前，原验证器继续有效。' : '验证密码后生成新的验证器密钥。',
     );
     if (!proceed || !context.mounted) return;
+    final proof = await _securityProof(context, enabled);
+    if (proof == null || !context.mounted) return;
     try {
-      final secret = await widget.session.api.beginTwoFactor();
+      final secret = await widget.session.api.beginTwoFactor(proof);
       if (!context.mounted) return;
       final code = TextEditingController();
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('双重验证'),
+          title: const AppText('双重验证'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               SelectableText('密钥：$secret'),
               TextField(
                 controller: code,
-                decoration: const InputDecoration(labelText: '动态验证码'),
+                decoration: InputDecoration(labelText: tr(context, '动态验证码')),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
+              child: const AppText('取消'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('确认'),
+              child: const AppText('确认'),
             ),
           ],
         ),
@@ -1678,18 +1832,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final account = await widget.session.api.confirmTwoFactor(
         code.text.trim(),
       );
-      final codes = await widget.session.api.recoveryCodes();
       widget.session.replaceAccount(account);
+      final codes = await widget.session.api.recoveryCodes({
+        'password': proof['password']!,
+        'code': code.text.trim(),
+      });
+      code.dispose();
       if (!context.mounted) return;
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('恢复码'),
+          title: const AppText('恢复码'),
           content: SelectableText(codes.join('\n')),
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('我已保存'),
+              child: const AppText('我已保存'),
             ),
           ],
         ),

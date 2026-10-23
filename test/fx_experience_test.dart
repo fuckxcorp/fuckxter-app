@@ -129,11 +129,16 @@ void main() {
     expect(find.byKey(const ValueKey('fx-tab-收藏')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('fx-tab-我的')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('fx-tab-私信')), findsNothing);
+    await tester.tap(find.byTooltip('个人主页选项'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('收藏'));
     await tester.pumpAndSettle();
     expect(find.byType(SavedScreen), findsOneWidget);
     expect(read, 0);
     expect(noticeLoads, 0);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('fx-tab-通知')));

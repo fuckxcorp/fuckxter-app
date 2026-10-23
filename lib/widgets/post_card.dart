@@ -3,7 +3,9 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../l10n.dart';
 import '../models/models.dart';
 import '../screens/flows.dart';
 import '../services/fuckxter_api.dart';
@@ -36,6 +38,12 @@ class PostCard extends StatefulWidget {
 class _PostCardState extends State<PostCard> {
   late Post post = widget.post;
   bool busy = false;
+  bool deleted = false;
+
+  bool get isOwner =>
+      widget.session.account != null &&
+      (post.isAuthor ||
+          widget.session.account!.profile.handle == post.author.handle);
 
   @override
   void didUpdateWidget(PostCard oldWidget) {
@@ -72,6 +80,7 @@ class _PostCardState extends State<PostCard> {
 
   @override
   Widget build(BuildContext context) {
+    if (deleted) return const SizedBox.shrink();
     final shown = post;
     final compact = MediaQuery.sizeOf(context).width < 720;
     return GestureDetector(
@@ -188,7 +197,7 @@ class _PostCardState extends State<PostCard> {
                             if (post.repostKind != null && post.source == null)
                               const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 12),
-                                child: Text('原帖已删除或不可见'),
+                                child: AppText('原帖已删除或不可见'),
                               ),
                             if (post.repostKind != 'repost' &&
                                 shown.media.isNotEmpty)
@@ -218,7 +227,7 @@ class _PostCardState extends State<PostCard> {
                                       ),
                                 ),
                                 CountAction(
-                                  label: '转发与更多操作',
+                                  label: '转发',
                                   icon: CupertinoIcons.repeat,
                                   value: shown.stats.reposts,
                                   active: shown.reposted,
@@ -261,11 +270,16 @@ class _PostCardState extends State<PostCard> {
                                     _emit(shown.copyWith(saved: next));
                                   }),
                                 ),
+                                if (isOwner)
+                                  CountAction(
+                                    label: '删除',
+                                    icon: CupertinoIcons.trash,
+                                    onTap: busy ? null : () => _delete(shown),
+                                  ),
                                 CountAction(
-                                  label: '复制链接',
+                                  label: '分享',
                                   icon: CupertinoIcons.share,
-                                  onTap: () =>
-                                      copyText(context, api.postWebUrl(shown)),
+                                  onTap: () => _share(shown),
                                 ),
                               ],
                             ),
@@ -295,16 +309,16 @@ class _PostCardState extends State<PostCard> {
               onTap: () => Navigator.pop(context, 'repost'),
             ),
             ListTile(
-              title: const Text('引用'),
+              title: const AppText('引用'),
               onTap: () => Navigator.pop(context, 'quote'),
             ),
-            if (post.repostKind != 'repost' && shown.isAuthor) ...[
+            if (post.repostKind != 'repost' && isOwner) ...[
               ListTile(
-                title: const Text('编辑'),
+                title: const AppText('编辑'),
                 onTap: () => Navigator.pop(context, 'edit'),
               ),
               ListTile(
-                title: const Text('删除'),
+                title: const AppText('删除'),
                 onTap: () => Navigator.pop(context, 'delete'),
               ),
             ],
@@ -332,7 +346,7 @@ class _PostCardState extends State<PostCard> {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(const SnackBar(content: Text('已引用')));
+          ).showSnackBar(const SnackBar(content: AppText('已引用')));
         }
       });
     } else if (choice == 'edit') {
@@ -352,18 +366,37 @@ class _PostCardState extends State<PostCard> {
         _emit(updated);
       });
     } else if (choice == 'delete') {
-      final ok = await confirm(context, '删除帖子', '删除后不能恢复。');
-      if (!ok || !mounted) return;
-      await _run(() async {
-        await api.deletePost(shown.id);
-        if (!mounted) return;
-        if (widget.onDeleted != null) {
-          widget.onDeleted!();
-        } else {
-          Navigator.maybePop(context);
-        }
-      });
+      await _delete(shown);
     }
+  }
+
+  Future<void> _share(Post shown) async {
+    try {
+      final box = context.findRenderObject() as RenderBox?;
+      await SharePlus.instance.share(
+        ShareParams(
+          uri: Uri.parse(api.postWebUrl(shown)),
+          sharePositionOrigin: box == null
+              ? null
+              : box.localToGlobal(Offset.zero) & box.size,
+        ),
+      );
+    } catch (error) {
+      if (mounted) showError(context, error);
+    }
+  }
+
+  Future<void> _delete(Post shown) async {
+    if (!isOwner || busy) return;
+    final ok = await confirm(context, '删除帖子', '删除后不能恢复。');
+    if (!ok || !mounted) return;
+    await _run(() async {
+      await api.deletePost(shown.id);
+      if (!mounted) return;
+      setState(() => deleted = true);
+      widget.onDeleted?.call();
+      if (widget.detail && mounted) Navigator.maybePop(context);
+    });
   }
 }
 
@@ -784,11 +817,11 @@ Future<String?> askText(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: const AppText('取消'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, text),
-          child: const Text('发送'),
+          child: const AppText('发送'),
         ),
       ],
     ),

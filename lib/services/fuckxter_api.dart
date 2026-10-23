@@ -116,8 +116,8 @@ class FuckXterApi {
 
   Future<void> deleteAccount() => _send('DELETE', '/me');
 
-  Future<String> beginTwoFactor() async {
-    final json = await _json('POST', '/me/2fa/setup');
+  Future<String> beginTwoFactor(Map<String, String> proof) async {
+    final json = await _json('POST', '/me/2fa/setup', body: proof);
     return json['secret'] as String? ?? '';
   }
 
@@ -126,11 +126,35 @@ class FuckXterApi {
     return _account(json);
   }
 
-  Future<List<String>> recoveryCodes() async {
-    final json = await _json('POST', '/me/2fa/recovery-codes');
+  Future<List<String>> recoveryCodes(Map<String, String> proof) async {
+    final json = await _json('POST', '/me/2fa/recovery-codes', body: proof);
     return (json['codes'] as List<dynamic>? ?? const [])
         .map((item) => '$item')
         .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> storageConfigs() async {
+    final json = await _json('GET', '/me/storage');
+    return (json['configs'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((value) => Map<String, dynamic>.from(value))
+        .toList();
+  }
+
+  Future<void> saveStorage(Map<String, dynamic> config) => _send(
+    config['id'] == null ? 'POST' : 'PUT',
+    config['id'] == null
+        ? '/me/storage'
+        : '/me/storage/${Uri.encodeComponent(config['id'] as String)}',
+    body: config,
+  );
+
+  Future<void> deleteStorage(String id) =>
+      _send('DELETE', '/me/storage/${Uri.encodeComponent(id)}');
+
+  Future<String> testStorage(Map<String, dynamic> config) async {
+    final json = await _json('POST', '/me/storage/test', body: config);
+    return json['message'] as String? ?? '连接成功';
   }
 
   Future<FeedPage> timeline({required String tab, String? cursor}) async {
@@ -407,6 +431,13 @@ class FuckXterApi {
     required String name,
     required String contentType,
   }) async {
+    final session = cookie;
+    final options = await _json('GET', '/me/storage/options');
+    if (cookie != session) throw const ApiException('登录状态已改变，请重试。', 401);
+    final defaults = (options['options'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .where((item) => item['isDefault'] == true);
+    final storageId = defaults.isEmpty ? 'platform' : '${defaults.first['id']}';
     final response = await _raw(
       'POST',
       '/media',
@@ -416,6 +447,7 @@ class FuckXterApi {
             ? 'application/octet-stream'
             : contentType,
         'X-File-Name': Uri.encodeComponent(name),
+        'X-Storage-Config-Id': storageId,
       },
     );
     final json = _decode(response);

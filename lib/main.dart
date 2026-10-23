@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'l10n.dart';
 import 'screens/home_screen.dart';
 import 'session.dart';
 
@@ -25,6 +27,10 @@ class FuckXterApp extends StatelessWidget {
       listenable: session,
       builder: (context, _) => MaterialApp(
         title: 'FuckXter',
+        builder: (context, child) => AppTranslations(child: child!),
+        locale: session.language == 'system' ? null : Locale(session.language),
+        supportedLocales: const [Locale('zh'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         debugShowCheckedModeBanner: false,
         themeMode: session.themeMode,
         theme: _light,

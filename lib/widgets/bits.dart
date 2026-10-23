@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n.dart';
 import '../services/fuckxter_api.dart';
 import '../services/media_image.dart';
 
@@ -395,7 +396,7 @@ Future<void> copyText(BuildContext context, String value) async {
   if (!context.mounted) return;
   ScaffoldMessenger.of(
     context,
-  ).showSnackBar(const SnackBar(content: Text('已复制链接')));
+  ).showSnackBar(const SnackBar(content: AppText('已复制链接')));
 }
 
 String relativeTime(DateTime value) {
@@ -440,7 +441,7 @@ class CountAction extends StatelessWidget {
         ? activeColor
         : Theme.of(context).colorScheme.onSurfaceVariant;
     return Tooltip(
-      message: label,
+      message: tr(context, label),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
@@ -474,7 +475,7 @@ class EmptyHint extends StatelessWidget {
   Widget build(BuildContext context) => Center(
     child: Padding(
       padding: const EdgeInsets.all(24),
-      child: Text(text, textAlign: TextAlign.center),
+      child: AppText(text, textAlign: TextAlign.center),
     ),
   );
 }
@@ -496,11 +497,11 @@ Future<bool> confirm(BuildContext context, String title, String body) async {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('取消'),
+          child: const AppText('取消'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
-          child: const Text('确定'),
+          child: const AppText('确定'),
         ),
       ],
     ),

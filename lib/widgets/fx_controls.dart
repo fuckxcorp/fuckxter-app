@@ -5,12 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fx_native_glass/fx_native_glass.dart';
 
-const fxLabels = ['首页', '搜索', '通知', '私信', '我的'];
+import '../l10n.dart';
+
+const fxLabels = ['首页', '搜索', '通知', '我的'];
 const fxIcons = [
   CupertinoIcons.house,
   CupertinoIcons.search,
   CupertinoIcons.bell,
-  CupertinoIcons.envelope,
   CupertinoIcons.person_crop_circle,
 ];
 
@@ -112,7 +113,7 @@ class FxTabs extends StatelessWidget {
                       child: Semantics(
                         button: true,
                         selected: selected == i,
-                        label: labels[i],
+                        label: tr(context, labels[i]),
                         child: InkWell(
                           key: ValueKey('fx-tab-${labels[i]}'),
                           borderRadius: BorderRadius.circular(12),
@@ -133,7 +134,7 @@ class FxTabs extends StatelessWidget {
                                             context,
                                           ).colorScheme.onSurfaceVariant,
                                   ),
-                                Text(
+                                AppText(
                                   labels[i],
                                   style: TextStyle(
                                     fontSize: icons == null ? 14 : 10,
@@ -215,7 +216,7 @@ class FxSidebar extends StatelessWidget {
               Semantics(
                 button: true,
                 selected: selected == i,
-                label: fxLabels[i],
+                label: tr(context, fxLabels[i]),
                 child: InkWell(
                   key: ValueKey('fx-rail-$i'),
                   borderRadius: BorderRadius.circular(16),
@@ -240,7 +241,7 @@ class FxSidebar extends StatelessWidget {
                                   ).colorScheme.onSurfaceVariant,
                           ),
                         const SizedBox(height: 4),
-                        Text(
+                        AppText(
                           fxLabels[i],
                           style: TextStyle(
                             fontSize: 11,

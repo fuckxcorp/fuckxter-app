@@ -16,6 +16,7 @@ class AppSession extends ChangeNotifier {
   List<HistoryItem> history = const [];
   bool ready = false;
   String feedTab = 'foryou';
+  String language = 'zh';
   SharedPreferences? _prefs;
   final _storage = const FlutterSecureStorage(
     mOptions: MacOsOptions(usesDataProtectionKeychain: false),
@@ -31,6 +32,9 @@ class AppSession extends ChangeNotifier {
     if (['foryou', 'latest', 'following'].contains(savedTab)) {
       feedTab = savedTab!;
     }
+    final savedLanguage = _prefs?.getString('fk_language');
+    if (['system', 'zh', 'en'].contains(savedLanguage))
+      language = savedLanguage!;
     final theme = _prefs?.getString('fk_theme');
     themeMode = switch (theme) {
       'dark' => ThemeMode.dark,
@@ -122,14 +126,21 @@ class AppSession extends ChangeNotifier {
     _prefs?.setString('fk_feed_tab', value);
   }
 
-  void toggleTheme() {
-    themeMode = themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-    _prefs?.setString(
-      'fk_theme',
-      themeMode == ThemeMode.dark ? 'dark' : 'light',
-    );
+  void setLanguage(String value) {
+    if (!['system', 'zh', 'en'].contains(value)) return;
+    language = value;
+    _prefs?.setString('fk_language', value);
     notifyListeners();
   }
+
+  void setTheme(ThemeMode value) {
+    themeMode = value;
+    _prefs?.setString('fk_theme', value.name);
+    notifyListeners();
+  }
+
+  void toggleTheme() =>
+      setTheme(themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark);
 
   String get _historyKey => 'fk_history:${account?.profile.handle ?? 'guest'}';
 

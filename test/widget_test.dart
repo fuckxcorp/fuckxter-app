@@ -289,7 +289,7 @@ void main() {
           .offset;
       await tester.tap(find.byKey(const ValueKey('fx-tab-我的')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('关闭账号菜单'));
+      await tester.pageBack();
       await tester.pumpAndSettle();
       expect(
         tester

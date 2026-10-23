@@ -93,8 +93,9 @@ class _HomeScreenState extends State<HomeScreen>
     if (index == 3) {
       await _guarded(() async {
         final handle = widget.session.account?.profile.handle;
-        if (handle != null && mounted)
+        if (handle != null && mounted) {
           openProfile(context, widget.session, handle);
+        }
       });
       return;
     }

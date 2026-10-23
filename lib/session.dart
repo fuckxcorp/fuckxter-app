@@ -33,8 +33,9 @@ class AppSession extends ChangeNotifier {
       feedTab = savedTab!;
     }
     final savedLanguage = _prefs?.getString('fk_language');
-    if (['system', 'zh', 'en'].contains(savedLanguage))
+    if (['system', 'zh', 'en'].contains(savedLanguage)) {
       language = savedLanguage!;
+    }
     final theme = _prefs?.getString('fk_theme');
     themeMode = switch (theme) {
       'dark' => ThemeMode.dark,

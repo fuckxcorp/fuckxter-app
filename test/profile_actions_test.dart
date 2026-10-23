@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -78,6 +79,37 @@ void main() {
     expect(find.byTooltip('分享'), findsOneWidget);
     expect(find.byTooltip('复制链接'), findsNothing);
   });
+
+  testWidgets(
+    'share invokes the native share channel without copying the link',
+    (tester) async {
+      const channel = MethodChannel('dev.fluttercommunity.plus/share');
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return 'dev.test.shared';
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      final session = AppSession()..ready = true;
+      addTearDown(session.api.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PostCard(post: post('bob'), session: session),
+          ),
+        ),
+      );
+      await tester.tap(find.byTooltip('分享'));
+      await tester.pumpAndSettle();
+      expect(calls, hasLength(1));
+      expect(calls.single.arguments.toString(), contains('/post/bob/1'));
+      expect(find.text('已复制链接'), findsNothing);
+    },
+  );
 
   testWidgets(
     'profile gear exposes the requested destinations only for the owner',
@@ -167,4 +199,26 @@ void main() {
       expect(requests[3].url.toString(), endsWith('/me/storage/bucket%2Fa'));
     },
   );
+  test('media uploads use the configured default storage', () async {
+    String? storage;
+    final api = FuckXterApi(
+      client: MockClient((request) async {
+        if (request.url.path == '/me/storage/options') {
+          return http.Response(
+            '{"options":[{"id":"custom","isDefault":true}]}',
+            200,
+          );
+        }
+        storage = request.headers['X-Storage-Config-Id'];
+        return http.Response('{"media":{"id":"m1","url":"/media/m1"}}', 200);
+      }),
+    );
+    addTearDown(api.close);
+    await api.uploadMedia(
+      bytes: [1, 2, 3],
+      name: 'image.png',
+      contentType: 'image/png',
+    );
+    expect(storage, 'custom');
+  });
 }

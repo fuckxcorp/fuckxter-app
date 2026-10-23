@@ -100,11 +100,12 @@ class _StorageScreenState extends State<StorageScreen> {
   Future<void> _load() async {
     try {
       final items = await widget.session.api.storageConfigs();
-      if (mounted)
+      if (mounted) {
         setState(() {
           configs = items;
           error = null;
         });
+      }
     } catch (e) {
       if (mounted) setState(() => error = e);
     } finally {
@@ -291,15 +292,18 @@ class _StorageEditorState extends State<StorageEditor> {
               ),
               validator: (value) {
                 if (['endpoint', 'bucket', 'accessKeyId'].contains(entry.key) &&
-                    (value?.trim().isEmpty ?? true))
+                    (value?.trim().isEmpty ?? true)) {
                   return tr(context, '必填');
+                }
                 if (entry.key == 'secretAccessKey' &&
                     widget.config == null &&
-                    (value?.isEmpty ?? true))
+                    (value?.isEmpty ?? true)) {
                   return tr(context, '必填');
+                }
                 if (entry.key == 'endpoint' &&
-                    Uri.tryParse(value ?? '')?.scheme != 'https')
+                    Uri.tryParse(value ?? '')?.scheme != 'https') {
                   return tr(context, '请输入 HTTPS 地址');
+                }
                 return null;
               },
             ),

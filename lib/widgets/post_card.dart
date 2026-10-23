@@ -276,10 +276,12 @@ class _PostCardState extends State<PostCard> {
                                     icon: CupertinoIcons.trash,
                                     onTap: busy ? null : () => _delete(shown),
                                   ),
-                                CountAction(
-                                  label: '分享',
-                                  icon: CupertinoIcons.share,
-                                  onTap: () => _share(shown),
+                                Builder(
+                                  builder: (shareContext) => CountAction(
+                                    label: '分享',
+                                    icon: CupertinoIcons.share,
+                                    onTap: () => _share(shareContext, shown),
+                                  ),
                                 ),
                               ],
                             ),
@@ -370,9 +372,9 @@ class _PostCardState extends State<PostCard> {
     }
   }
 
-  Future<void> _share(Post shown) async {
+  Future<void> _share(BuildContext shareContext, Post shown) async {
     try {
-      final box = context.findRenderObject() as RenderBox?;
+      final box = shareContext.findRenderObject() as RenderBox?;
       await SharePlus.instance.share(
         ShareParams(
           uri: Uri.parse(api.postWebUrl(shown)),

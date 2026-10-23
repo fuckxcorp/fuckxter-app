@@ -289,7 +289,7 @@ void main() {
           .offset;
       await tester.tap(find.byKey(const ValueKey('fx-tab-我的')));
       await tester.pumpAndSettle();
-      await tester.pageBack();
+      await tester.tap(find.byType(BackButton));
       await tester.pumpAndSettle();
       expect(
         tester

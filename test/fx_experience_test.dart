@@ -137,9 +137,9 @@ void main() {
     expect(find.byType(SavedScreen), findsOneWidget);
     expect(read, 0);
     expect(noticeLoads, 0);
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('fx-tab-通知')));
     await tester.pumpAndSettle();
@@ -218,7 +218,7 @@ void main() {
       expect(find.byType(PostScreen), findsNothing);
       await tester.pumpAndSettle();
       expect(find.byType(PostScreen), findsOneWidget);
-      await tester.pageBack();
+      await tester.tap(find.byType(BackButton));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Hello Fx'));
       await tester.pumpAndSettle();

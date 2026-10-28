@@ -845,7 +845,7 @@ class _Composer extends StatelessWidget {
                       maxLength: 1000,
                       minLines: 2,
                       maxLines: 6,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: tr(context, '有什么新鲜事？'),
                         counterStyle: TextStyle(fontSize: 11),
                         border: InputBorder.none,

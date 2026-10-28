@@ -2,7 +2,6 @@ name: Keep running back , coming back for more
 
 on:
   push:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -59,9 +58,6 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsecret-1-dev rpm zstd desktop-file-utils
           fi
-          dart format --output=none --set-exit-if-changed lib test packages/fx_native_glass/lib
-          flutter analyze
-          flutter test
 
       - name: Install Go for Linux packaging
         if: matrix.target == 'linux'

@@ -26,6 +26,7 @@ jobs:
             target: macos
           - os: macos-latest
             target: ios
+            
     steps:
       - name: Checkout
         uses: actions/checkout@main
@@ -69,13 +70,18 @@ jobs:
           go-version: stable
           cache: false
 
+      - name: Install WiX Toolset
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: choco install wixtoolset --yes --no-progress
+
       - name: Install nFPM
         if: matrix.target == 'linux'
         shell: bash
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
       - name: Configure Android signing
-        if: matrix.target == 'android' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: matrix.target == 'android'
         shell: bash
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -106,11 +112,11 @@ jobs:
               ;;
             windows)
               flutter build windows
-              tar -C build/windows/x64/runner/Release -acf "release/fuckxter-${APP_VERSION}-${APP_BUILD}-windows-x64.zip" .
+              pwsh -File scripts/package-windows.ps1 -AppVersion "$APP_VERSION" -AppBuild "$APP_BUILD"
               ;;
             ios)
-              flutter build ios --simulator --debug
-              tar -C build/ios/iphonesimulator -czf "release/fuckxter-${APP_VERSION}-${APP_BUILD}-ios-simulator.tar.gz" Runner.app
+              flutter build ios --release --no-codesign
+              bash scripts/package-ios.sh
               ;;
             macos)
               flutter build macos
@@ -119,28 +125,21 @@ jobs:
           esac
           ls -la release
 
-      - name: Upload build artifacts
-        if: matrix.target == 'ios' || github.ref != 'refs/heads/main'
-        uses: actions/upload-artifact@main
-        with:
-          name: ${{ matrix.target }}-build
-          path: |
-            release/*
-            build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: error
-
       - name: Clean Android signing files
         if: always() && matrix.target == 'android'
         shell: bash
         run: rm -f android/release.jks android/key.properties
 
       - name: Release
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && matrix.target != 'ios'
         uses: softprops/action-gh-release@master
         with:
           tag_name: V${{ steps.get_version.outputs.version }}
-          files: release/*
+          files: |
+            release/*
+            build/app/outputs/flutter-apk/app-debug.apk
           fail_on_unmatched_files: true
-          body: 修复和改进。
+          body: |
+            # 📝 更新日志
+            修复和改进。
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

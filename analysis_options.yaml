@@ -1,7 +1,6 @@
 analyzer:
   exclude:
     - build/**
-    - web/**
     - linux/**
     - android/**
     - macos/**

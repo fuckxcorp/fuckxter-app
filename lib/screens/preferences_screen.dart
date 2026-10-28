@@ -53,7 +53,9 @@ class PreferencesScreen extends StatelessWidget {
               items: const [
                 DropdownMenuItem(value: 'system', child: AppText('跟随系统')),
                 DropdownMenuItem(value: 'zh', child: Text('简体中文')),
+                DropdownMenuItem(value: 'zh-Hant', child: Text('繁體中文')),
                 DropdownMenuItem(value: 'en', child: Text('English')),
+                DropdownMenuItem(value: 'es', child: Text('Español')),
               ],
               onChanged: (value) {
                 if (value != null) session.setLanguage(value);

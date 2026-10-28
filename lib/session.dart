@@ -33,7 +33,7 @@ class AppSession extends ChangeNotifier {
       feedTab = savedTab!;
     }
     final savedLanguage = _prefs?.getString('fk_language');
-    if (['system', 'zh', 'en'].contains(savedLanguage)) {
+    if (['system', 'zh', 'zh-Hant', 'en', 'es'].contains(savedLanguage)) {
       language = savedLanguage!;
     }
     final theme = _prefs?.getString('fk_theme');
@@ -128,7 +128,7 @@ class AppSession extends ChangeNotifier {
   }
 
   void setLanguage(String value) {
-    if (!['system', 'zh', 'en'].contains(value)) return;
+    if (!['system', 'zh', 'zh-Hant', 'en', 'es'].contains(value)) return;
     language = value;
     _prefs?.setString('fk_language', value);
     notifyListeners();

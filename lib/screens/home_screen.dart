@@ -392,7 +392,7 @@ class _HomeScreenState extends State<HomeScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('登录后查看${fxLabels[index]}'),
+            Text('${tr(context, '登录后查看')} ${tr(context, fxLabels[index])}'),
             const SizedBox(height: 12),
             FilledButton(
               onPressed: () => openLogin(context, widget.session),
@@ -547,7 +547,7 @@ class _HomeScreenState extends State<HomeScreen>
       extendBody: true,
       floatingActionButton: compact && !keyboard && section == 0
           ? FloatingActionButton.small(
-              tooltip: '撰写帖子',
+              tooltip: tr(context, '撰写帖子'),
               onPressed: _compose,
               child: const Icon(CupertinoIcons.square_pencil),
             )
@@ -688,11 +688,11 @@ class _TopBar extends StatelessWidget {
       onSubmitted: (_) => onSubmit(),
       decoration: InputDecoration(
         prefixIcon: const Icon(CupertinoIcons.search, size: 18),
-        hintText: '搜索 FuckXter',
+        hintText: tr(context, '搜索 FuckXter'),
         border: InputBorder.none,
         suffixIcon: searching
             ? IconButton(
-                tooltip: '关闭搜索',
+                tooltip: tr(context, '关闭搜索'),
                 onPressed: onCloseSearch,
                 icon: const Icon(CupertinoIcons.xmark, size: 18),
               )
@@ -846,7 +846,7 @@ class _Composer extends StatelessWidget {
                       minLines: 2,
                       maxLines: 6,
                       decoration: const InputDecoration(
-                        hintText: '有什么新鲜事？',
+                        hintText: tr(context, '有什么新鲜事？'),
                         counterStyle: TextStyle(fontSize: 11),
                         border: InputBorder.none,
                       ),
@@ -877,7 +877,7 @@ class _Composer extends StatelessWidget {
                                   right: 0,
                                   top: 0,
                                   child: IconButton.filled(
-                                    tooltip: '移除图片',
+                                    tooltip: tr(context, '移除图片'),
                                     onPressed: posting || uploading
                                         ? null
                                         : () => onRemove(media[index].id),
@@ -892,7 +892,7 @@ class _Composer extends StatelessWidget {
                     Row(
                       children: [
                         IconButton(
-                          tooltip: '添加图片',
+                          tooltip: tr(context, '添加图片'),
                           onPressed: uploading || posting ? null : onAttach,
                           icon: const Icon(CupertinoIcons.paperclip, size: 20),
                         ),
@@ -903,7 +903,7 @@ class _Composer extends StatelessWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         PopupMenuButton<String>(
-                          tooltip: '帖子可见范围',
+                          tooltip: tr(context, '帖子可见范围'),
                           enabled: !posting && !uploading,
                           initialValue: visibility,
                           onSelected: onVisibility,
@@ -936,7 +936,7 @@ class _Composer extends StatelessWidget {
                                     value.text.trim().isEmpty
                                 ? null
                                 : onSubmit,
-                            child: Text(posting ? '发送中…' : '发帖'),
+                            child: Text(tr(context, posting ? '发送中…' : '发帖')),
                           ),
                         ),
                       ],

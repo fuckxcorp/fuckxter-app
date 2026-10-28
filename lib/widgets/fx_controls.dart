@@ -79,6 +79,9 @@ class FxTabs extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, box) {
           final width = box.maxWidth / labels.length;
+          final edgeInset = height * math.tan(14 * math.pi / 180) / 2 + 5;
+          final leftInset = selected == 0 ? edgeInset : 5.0;
+          final rightInset = selected == labels.length - 1 ? edgeInset : 5.0;
           return Stack(
             children: [
               AnimatedPositioned(
@@ -88,8 +91,8 @@ class FxTabs extends StatelessWidget {
                 curve: Curves.easeOutBack,
                 top: 4,
                 bottom: 4,
-                left: selected * width + 5,
-                width: math.max(0, width - 10),
+                left: selected * width + leftInset,
+                width: math.max(0, width - leftInset - rightInset),
                 child: Transform(
                   alignment: Alignment.center,
                   transform: Matrix4.skewX(-14 * math.pi / 180),

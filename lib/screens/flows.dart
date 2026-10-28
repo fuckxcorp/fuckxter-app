@@ -174,30 +174,30 @@ class _LoginScreenState extends State<LoginScreen> {
           TextField(
             controller: email,
             keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(labelText: '邮箱'),
+            decoration: InputDecoration(labelText: tr(context, '邮箱')),
           ),
           if (!useRecovery)
             TextField(
               controller: password,
               obscureText: true,
-              decoration: const InputDecoration(labelText: '密码'),
+              decoration: InputDecoration(labelText: tr(context, '密码')),
             ),
           if (needCode && !useRecovery)
             TextField(
               controller: code,
-              decoration: const InputDecoration(labelText: '动态验证码'),
+              decoration: InputDecoration(labelText: tr(context, '动态验证码')),
             ),
           if (useRecovery)
             TextField(
               controller: recovery,
-              decoration: const InputDecoration(labelText: '恢复码'),
+              decoration: InputDecoration(labelText: tr(context, '恢复码')),
             ),
           const SizedBox(height: 12),
           Text(status),
           const SizedBox(height: 12),
           FilledButton(
             onPressed: busy ? null : _submit,
-            child: Text(busy ? '请稍候…' : '继续'),
+            child: Text(tr(context, busy ? '请稍候…' : '继续')),
           ),
           TextButton(
             onPressed: busy
@@ -206,7 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     useRecovery = !useRecovery;
                     needCode = useRecovery || needCode;
                   }),
-            child: Text(useRecovery ? '改用密码登录' : '使用恢复码'),
+            child: Text(tr(context, useRecovery ? '改用密码登录' : '使用恢复码')),
           ),
         ],
       ),
@@ -297,8 +297,8 @@ class _SearchScreenState extends State<SearchScreen> {
               title: TextField(
                 controller: controller,
                 textInputAction: TextInputAction.search,
-                decoration: const InputDecoration(
-                  hintText: '搜索 FuckXter',
+                decoration: InputDecoration(
+                  hintText: tr(context, '搜索 FuckXter'),
                   border: InputBorder.none,
                 ),
                 onSubmitted: (_) => _run(),
@@ -315,7 +315,12 @@ class _SearchScreenState extends State<SearchScreen> {
               itemBuilder: (_, index) {
                 if (users.isEmpty && posts.isEmpty) {
                   return EmptyHint(
-                    controller.text.trim().isEmpty ? '搜索用户和帖子' : '没有匹配的用户或帖子',
+                    tr(
+                      context,
+                      controller.text.trim().isEmpty
+                          ? '搜索用户和帖子'
+                          : '没有匹配的用户或帖子',
+                    ),
                   );
                 }
                 if (index < users.length) {
@@ -328,7 +333,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                     title: Text(user.name),
                     subtitle: Text(
-                      '@${user.handle} · 帖子 ${user.posts} · 粉丝 ${user.followers}',
+                      '@${user.handle} · ${tr(context, '帖子')} ${user.posts} · ${tr(context, '粉丝')} ${user.followers}',
                     ),
                     onTap: () =>
                         openProfile(context, widget.session, user.handle),
@@ -782,7 +787,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             : FilledButton(
                                 onPressed: () => _follow(user),
                                 child: Text(
-                                  user.viewerFollowing ? '已关注' : '关注',
+                                  tr(context, user.viewerFollowing ? '已关注' : '关注'),
                                 ),
                               ),
                       ),
@@ -807,7 +812,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 user,
                                 'followers',
                               ),
-                              child: Text('粉丝 ${user.followers}'),
+                              child: Text(
+                                '${tr(context, '粉丝 ')}${user.followers}',
+                              ),
                             ),
                             TextButton(
                               onPressed: () => openConnections(
@@ -816,7 +823,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 user,
                                 'following',
                               ),
-                              child: Text('关注 ${user.following}'),
+                              child: Text(
+                                '${tr(context, '关注 ')}${user.following}',
+                              ),
                             ),
                             const Spacer(),
                             if (widget.session.account?.profile.handle !=
@@ -851,7 +860,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   PopupMenuItem(
                                     value: 'block',
-                                    child: Text(user.blocked ? '取消屏蔽' : '屏蔽'),
+                                    child: Text(
+                                      tr(context, user.blocked ? '取消屏蔽' : '屏蔽'),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -925,7 +936,9 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.kind == 'followers' ? '粉丝' : '关注')),
+      appBar: AppBar(
+        title: AppText(widget.kind == 'followers' ? '粉丝' : '关注'),
+      ),
       body: loading
           ? const LoadingPane()
           : error != null
@@ -1575,7 +1588,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           if (!widget.security) ...[
-            Text('邮箱 ${account.profile.email}'),
+            SizedBox(
+              height: 174,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    bottom: 20,
+                    child: Tooltip(
+                      message: tr(context, '更换头图'),
+                      child: Material(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => _pick(true),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (account.headerUrl == null ||
+                                  account.headerUrl!.isEmpty)
+                                const DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Color(0xFF536B83),
+                                        Color(0xFF78917F),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              else
+                                NetImage(
+                                  url: account.headerUrl!,
+                                  fit: BoxFit.cover,
+                                  headers: widget.session.api.imageHeaders,
+                                ),
+                              Align(
+                                alignment: Alignment.bottomRight,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: _imageEditBadge(),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 16,
+                    bottom: 0,
+                    child: Tooltip(
+                      message: tr(context, '更换头像'),
+                      child: Material(
+                        shape: const CircleBorder(),
+                        color: Theme.of(context).colorScheme.surface,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () => _pick(false),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Stack(
+                              children: [
+                                Avatar(
+                                  name: account.profile.name,
+                                  size: 78,
+                                  url: account.avatarUrl,
+                                  headers: widget.session.api.imageHeaders,
+                                ),
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: _imageEditBadge(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text('${tr(context, '邮箱')} ${account.profile.email}'),
             TextField(
               controller: name,
               decoration: InputDecoration(labelText: tr(context, '名字')),
@@ -1616,25 +1716,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 setState(() => policy = value);
               },
             ),
-            Wrap(
-              spacing: 8,
-              children: [
-                OutlinedButton(
-                  onPressed: () => _pick(false),
-                  child: const AppText('更换头像'),
-                ),
-                OutlinedButton(
-                  onPressed: () => _pick(true),
-                  child: const AppText('更换头图'),
-                ),
-                OutlinedButton(
-                  onPressed: () async {
-                    await widget.session.api.removeAvatar();
-                    await widget.session.refreshAccount();
-                  },
-                  child: const AppText('移除头像'),
-                ),
-              ],
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () async {
+                  await widget.session.api.removeAvatar();
+                  await widget.session.refreshAccount();
+                },
+                icon: const Icon(Icons.person_remove_outlined),
+                label: const AppText('移除头像'),
+              ),
             ),
             const SizedBox(height: 8),
             FilledButton(onPressed: _save, child: const AppText('保存资料')),
@@ -1859,4 +1950,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (context.mounted) setState(() => status = '$error');
     }
   }
+
+  Widget _imageEditBadge() => DecoratedBox(
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: .68),
+      shape: BoxShape.circle,
+      border: Border.all(color: Colors.white.withValues(alpha: .8)),
+    ),
+    child: const Padding(
+      padding: EdgeInsets.all(7),
+      child: Icon(Icons.camera_alt_outlined, size: 16, color: Colors.white),
+    ),
+  );
 }

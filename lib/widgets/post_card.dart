@@ -307,7 +307,7 @@ class _PostCardState extends State<PostCard> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Text(shown.reposted ? '取消转发' : '转发'),
+              title: Text(tr(context, shown.reposted ? '取消转发' : '转发')),
               onTap: () => Navigator.pop(context, 'repost'),
             ),
             ListTile(
@@ -341,7 +341,11 @@ class _PostCardState extends State<PostCard> {
         );
       });
     } else if (choice == 'quote') {
-      final text = await askText(context, title: '引用', hint: '加上你的看法');
+      final text = await askText(
+        context,
+        title: tr(context, '引用'),
+        hint: tr(context, '加上你的看法'),
+      );
       if (text == null || text.trim().isEmpty || !mounted) return;
       await _run(() async {
         await api.quotePost(shown.id, text.trim());
@@ -600,7 +604,7 @@ class _MediaStripState extends State<_MediaStrip> {
     dimension: 32,
     child: IconButton(
       padding: EdgeInsets.zero,
-      tooltip: direction < 0 ? '上一张' : '下一张',
+      tooltip: tr(context, direction < 0 ? '上一张' : '下一张'),
       style: IconButton.styleFrom(
         backgroundColor: Colors.black.withValues(alpha: .55),
         foregroundColor: Colors.white,
@@ -773,13 +777,13 @@ class _MediaGalleryState extends State<MediaGallery>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton(
-                    tooltip: '上一张',
+                    tooltip: tr(context, '上一张'),
                     color: Colors.white,
                     onPressed: index == 0 ? null : () => _move(-1),
                     icon: const Icon(CupertinoIcons.chevron_left),
                   ),
                   IconButton(
-                    tooltip: '下一张',
+                    tooltip: tr(context, '下一张'),
                     color: Colors.white,
                     onPressed: index + 1 == widget.media.length
                         ? null

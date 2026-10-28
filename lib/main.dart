@@ -28,8 +28,20 @@ class FuckXterApp extends StatelessWidget {
       builder: (context, _) => MaterialApp(
         title: 'FuckXter',
         builder: (context, child) => AppTranslations(child: child!),
-        locale: session.language == 'system' ? null : Locale(session.language),
-        supportedLocales: const [Locale('zh'), Locale('en')],
+        locale: switch (session.language) {
+          'system' => null,
+          'zh-Hant' => const Locale.fromSubtags(
+            languageCode: 'zh',
+            scriptCode: 'Hant',
+          ),
+          _ => Locale(session.language),
+        },
+        supportedLocales: const [
+          Locale('zh'),
+          Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
+          Locale('en'),
+          Locale('es'),
+        ],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         debugShowCheckedModeBanner: false,
         themeMode: session.themeMode,

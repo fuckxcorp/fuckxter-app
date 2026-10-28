@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n.dart';
 import '../models/models.dart';
 import 'bits.dart';
 import 'fx_controls.dart';
@@ -17,7 +18,7 @@ Future<String?> showFxAccountMenu(
   return showGeneralDialog<String>(
     context: context,
     barrierDismissible: true,
-    barrierLabel: '关闭账号菜单',
+    barrierLabel: tr(context, '关闭账号菜单'),
     barrierColor: Colors.black.withValues(alpha: .22),
     transitionDuration: Duration(milliseconds: reduced ? 0 : 240),
     pageBuilder: (context, _, _) {
@@ -61,7 +62,7 @@ Future<String?> showFxAccountMenu(
                             children: [
                               const Spacer(),
                               IconButton(
-                                tooltip: '关闭账号菜单',
+                                tooltip: tr(context, '关闭账号菜单'),
                                 onPressed: () => Navigator.pop(context),
                                 icon: const Icon(
                                   CupertinoIcons.xmark,

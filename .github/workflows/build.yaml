@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Morning dew (${{ matrix.target }})
+    name: Morning dew for ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

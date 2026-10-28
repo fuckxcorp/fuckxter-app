@@ -134,9 +134,7 @@ jobs:
         uses: softprops/action-gh-release@master
         with:
           tag_name: V${{ steps.get_version.outputs.version }}
-          files: |
-            release/*
-            build/app/outputs/flutter-apk/app-debug.apk
+          files: release/*
           fail_on_unmatched_files: true
           body: |
             # 📝 更新日志

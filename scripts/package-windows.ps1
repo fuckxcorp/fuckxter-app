@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $bundle = Join-Path $root 'build/windows/x64/runner/Release'
 $wxs = Join-Path $root 'windows/installer.wxs'
+$transform = Join-Path $root 'scripts/windows-installer.xslt'
 $obj = Join-Path $root 'build/windows/installer'
 $release = Join-Path $root 'release'
 
@@ -31,7 +32,7 @@ if (-not ($heat -and $candle -and $light)) {
 New-Item -ItemType Directory -Force $obj, $release | Out-Null
 $harvested = Join-Path $obj 'bundle.wxs'
 & $heat dir $bundle -cg AppFiles -dr INSTALLFOLDER -srd -sreg -sfrag -ag `
-  -var var.SourceDir -out $harvested
+  -var var.SourceDir -t $transform -out $harvested
 if ($LASTEXITCODE -ne 0) { throw 'WiX heat failed.' }
 
 & $candle -nologo -arch x64 "-dAppVersion=$AppVersion" "-dAppBuild=$AppBuild" `

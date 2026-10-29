@@ -8,22 +8,14 @@
     <MediaTemplate EmbedCab="yes" />
     <Feature Id="ProductFeature" Title="FuckXter" Level="1">
       <ComponentGroupRef Id="AppFiles" />
-      <ComponentRef Id="StartMenuShortcut" />
     </Feature>
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLFOLDER" Name="FuckXter" />
       </Directory>
-      <Directory Id="ProgramMenuFolder">
+      <Directory Id="CommonProgramsFolder">
         <Directory Id="ApplicationProgramsFolder" Name="FuckXter" />
       </Directory>
     </Directory>
-    <Component Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Guid="*">
-      <Shortcut Id="ApplicationStartMenuShortcut" Name="FuckXter"
-                Target="[INSTALLFOLDER]fuckxter_app.exe" WorkingDirectory="INSTALLFOLDER" />
-      <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
-      <RegistryValue Root="HKLM" Key="Software\FuckXter" Name="installed"
-                     Type="integer" Value="1" KeyPath="yes" />
-    </Component>
   </Product>
 </Wix>

@@ -34,7 +34,7 @@ $harvested = Join-Path $obj 'bundle.wxs'
   -var var.SourceDir -out $harvested
 if ($LASTEXITCODE -ne 0) { throw 'WiX heat failed.' }
 
-& $candle -nologo "-dAppVersion=$AppVersion" "-dAppBuild=$AppBuild" `
+& $candle -nologo -arch x64 "-dAppVersion=$AppVersion" "-dAppBuild=$AppBuild" `
   "-dSourceDir=$bundle" -out "$obj\" $wxs $harvested
 if ($LASTEXITCODE -ne 0) { throw 'WiX candle failed.' }
 

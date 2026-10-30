@@ -1,4 +1,4 @@
-package com.example.fuckxter_app
+package org.fuckxcorp.fuckxter.app
 
 import io.flutter.embedding.android.FlutterActivity
 
